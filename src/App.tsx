@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, Grid2X2, History, Landmark, ReceiptText, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
-import type { AnalysisResult, Movement } from './types';
+import { Activity, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, FileSpreadsheet, Grid2X2, History, Landmark, ReceiptText, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
+import type { AnalysisResult } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
 import { classifyMovement } from './lib/movementType';
 import { currentHistory, loadHistory, saveHistorySnapshot } from './lib/history';
 import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
+import DataExplorer from './DataExplorer';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
 const LAST_RESULT_KEY = 'reconciliation-realtime-last-result-v1';
+const APP_BUILD = '0.1.0';
 
 function loadLastResult(): AnalysisResult | null {
   try { return JSON.parse(sessionStorage.getItem(LAST_RESULT_KEY) ?? 'null') as AnalysisResult | null; }
@@ -34,8 +36,6 @@ const movementTypes = [
 ] as const;
 
 function Results({ result }: { result: AnalysisResult }) {
-  const [filter, setFilter] = useState('all');
-  const rows = useMemo(() => result.movements.filter((m) => filter === 'all' || m.status === filter).slice(0, 250), [result, filter]);
   const typeSummaries = useMemo(() => {
     const counts = new Map(movementTypes.map((type) => [type.key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
     if (result.movementTypes) for (const [key, value] of Object.entries(result.movementTypes)) Object.assign(counts.get(key as typeof movementTypes[number]['key'])!, value);
@@ -51,7 +51,6 @@ function Results({ result }: { result: AnalysisResult }) {
       return { ...type, ...count, rate: count.total ? Math.round((count.reconciled / count.total) * 100) : 0 };
     });
   }, [result]);
-  const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado automaticamente por IDTR', manual: 'Reconciliado manualmente na plataforma', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
   return <>
     <section className="metrics">
       <Metric label="Total movimentos" value={result.totals.movements.toLocaleString('pt-AO')} />
@@ -80,13 +79,6 @@ function Results({ result }: { result: AnalysisResult }) {
           </div>
         </article>;
       })}</div>
-    </section>
-    <section className="panel">
-      <div className="panel-head"><div><h2>Detalhe dos movimentos analisados</h2><p>Reporte de {result.reportDate || 'data não identificada'}</p></div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados automaticamente por IDTR</option><option value="manual">Reconciliados manualmente na plataforma</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
-      </div>
-      <div className="table-wrap"><table><thead><tr><th>Linha</th><th>Data</th><th>IDTR</th><th>Descrição</th><th>Valor</th><th>Estado</th></tr></thead><tbody>{rows.map((m) => <tr key={m.id}><td>{m.row}</td><td>{m.reportDate}</td><td className="mono">{m.idtr ?? '—'}</td><td>{m.description}</td><td className="amount">{money.format(m.amount)}</td><td><span className={`badge ${m.status}`}>{statusLabel(m)}</span></td></tr>)}</tbody></table></div>
-      {rows.length === 250 && <p className="table-note">A mostrar os primeiros 250 movimentos do filtro selecionado.</p>}
     </section>
   </>;
 }
@@ -148,14 +140,14 @@ function Guide() {
 export default function App() {
   const identity = useAuth();
   type Tool = 'portal' | 'realtime' | 'stc';
-  type View = 'import' | 'results' | 'guide' | 'history' | 'users' | 'audit';
+  type View = 'import' | 'results' | 'movements' | 'guide' | 'history' | 'users' | 'audit';
   const [tool, setTool] = useState<Tool>(() => {
     const saved = sessionStorage.getItem('reconciliation-active-tool');
     return saved === 'realtime' || saved === 'stc' ? saved : 'portal';
   });
   const [view, setView] = useState<View>(() => {
     const saved = sessionStorage.getItem('reconciliation-active-view');
-    return saved === 'import' || saved === 'results' || saved === 'guide' || saved === 'history' || saved === 'users' || saved === 'audit'
+    return saved === 'import' || saved === 'results' || saved === 'movements' || saved === 'guide' || saved === 'history' || saved === 'users' || saved === 'audit'
       ? saved : currentHistory(loadHistory()).length ? 'results' : 'import';
   });
   const [result, setResult] = useState<AnalysisResult | null>(loadLastResult);
@@ -173,14 +165,14 @@ export default function App() {
     try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes }))); setResult(analyzed); saveLastResult(analyzed); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
-  const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
-  const pageDescription = view === 'import' ? 'Importe diretamente o extrato Real Time, sem ficheiros intermédios.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'guide' ? 'Compreenda o ciclo, as regras e o impacto da data escolhida.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
+  const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'movements' ? 'Consulta e extração de movimentos' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
+  const pageDescription = view === 'import' ? 'Importe diretamente o extrato Real Time, sem ficheiros intermédios.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'movements' ? 'Filtre, ordene e extraia os movimentos disponíveis em Excel ou PDF.' : view === 'guide' ? 'Compreenda o ciclo, as regras e o impacto da data escolhida.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   if (tool === 'portal') return <div className="tool-portal"><header><div className="portal-brand"><img className="keve-logo portal-logo" src="/keve-logo-purple.png" alt="Keve — O Banco que avança"/><div><strong>Portal de Reconciliação</strong><span>Ferramentas operacionais</span></div></div><div className="portal-user"><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.email}</span></div></div></header><main><div className="portal-heading"><p className="eyebrow">SELECIONE UMA FERRAMENTA</p><h1>Reconciliações financeiras</h1><p>Cada ferramenta mantém as suas próprias regras, importações, resultados e histórico.</p></div><div className="tool-grid"><article className="tool-card realtime"><div className="tool-card-icon"><Activity size={30}/></div><span className="tool-status available">Disponível</span><h2>Reconciliação Real Time</h2><p>Importação direta dos extratos Real Time, reconciliação automática por IDTR e tratamento auditável das exceções.</p><ul><li>Extratos Real Time</li><li>Reconciliação automática e manual</li><li>Histórico e deteção de anomalias</li></ul><button className="primary-button" onClick={() => setTool('realtime')}>Abrir ferramenta</button></article><article className="tool-card stc"><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><span className="tool-status preparing">Em preparação</span><h2>Reconciliação STC</h2><h3>Sistema de Transferências a Crédito</h3><p>Ferramenta dedicada ao tratamento e reconciliação das operações do STC, com regras e histórico independentes.</p><ul><li>Importações próprias do STC</li><li>Regras específicas de transferências</li><li>Auditoria separada</li></ul><button className="secondary-button" onClick={() => setTool('stc')}>Ver ferramenta</button></article></div></main></div>;
   if (tool === 'stc') return <div className="tool-placeholder"><div><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><p className="eyebrow">NOVA FERRAMENTA</p><h1>Reconciliação STC</h1><h2>Sistema de Transferências a Crédito</h2><p>A estrutura está reservada e será desenvolvida com regras, importações e histórico próprios.</p><button className="primary-button" onClick={() => setTool('portal')}>Voltar às ferramentas</button></div></div>;
   return <div className="app-shell">
     <aside><div className="brand"><img className="keve-logo sidebar-logo" src="/keve-logo-green.png" alt="Keve — O Banco que avança"/><div><strong>Reconciliação</strong><span>Real Time</span></div></div><button className="tool-switcher" onClick={() => setTool('portal')}><Grid2X2 size={17}/>Todas as ferramentas</button>
-      <nav><button className={view === 'results' ? 'active' : ''} title="Abrir o último dashboard de resultados" onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><BookOpen size={19}/>Como funciona</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
-      <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
+      <nav><button className={view === 'results' ? 'active' : ''} title="Abrir o último dashboard de resultados" onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'movements' ? 'active' : ''} onClick={() => setView('movements')}><FileSpreadsheet size={19}/>Movimentos</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><BookOpen size={19}/>Como funciona</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
+      <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div><div className="sidebar-build">DIOGO ABRANCHES · BUILD {APP_BUILD}</div>
     </aside>
     <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div></header>
       <RealTimeOverview revision={historyRevision}/>
@@ -188,10 +180,11 @@ export default function App() {
         <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o extrato…' : 'Arraste o extrato Real Time para aqui'}</h2><p>A plataforma lê diretamente as colunas MR, extrai o IDTR e reconcilia sem ficheiros intermédios.</p><label className="primary-button">Selecionar extrato<input type="file" accept=".xlsx" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formato aceite: extrato Real Time em XLSX</small>{error && <div className="error">{error}</div>}
       </section>}
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
-      {view === 'results' && !busy && result && <><div className="actions"><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><Results result={result}/></>}
+      {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('movements')}>Consultar movimentos</button><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><Results result={result}/></>}
       {view === 'results' && !busy && !result && <SavedResults revision={historyRevision} onImport={() => setView('import')}/>}
       {view === 'guide' && <Guide/>}
       {view === 'history' && <HistoryDashboard revision={historyRevision}/>}
+      {view === 'movements' && <DataExplorer result={result} onImport={() => setView('import')}/>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
       {view === 'audit' && identity.isAdmin && <section className="panel empty-state"><Activity size={28}/><h2>Log de utilização</h2><p>As ações da plataforma serão apresentadas aqui com filtros e exportação.</p></section>}
     </main>
