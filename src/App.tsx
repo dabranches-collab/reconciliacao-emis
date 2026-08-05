@@ -45,7 +45,6 @@ function Results({ result }: { result: AnalysisResult }) {
     <section className="metrics">
       <Metric label="Total movimentos" value={result.totals.movements.toLocaleString('pt-AO')} />
       <Metric label="Reconciliados automaticamente por IDTR" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
-      <Metric label="Reconciliados manualmente na plataforma" value={result.totals.manual.toLocaleString('pt-AO')} tone="manual" />
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
       <Metric label="Movimentos sem IDTR" value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
@@ -172,7 +171,7 @@ export default function App() {
         <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o extrato…' : 'Arraste o extrato Real Time para aqui'}</h2><p>A plataforma lê diretamente as colunas MR, extrai o IDTR e reconcilia sem ficheiros intermédios.</p><label className="primary-button">Selecionar extrato<input type="file" accept=".xlsx" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formato aceite: extrato Real Time em XLSX</small>{error && <div className="error">{error}</div>}
       </section>}
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
-      {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('movements')}>Consultar movimentos</button><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><Results result={result}/></>}
+      {view === 'results' && !busy && result && <Results result={result}/>}
       {view === 'results' && !busy && !result && <SavedResults revision={historyRevision} onImport={() => setView('import')}/>}
       {view === 'guide' && <Guide/>}
       {view === 'history' && <HistoryDashboard result={result}/>}
