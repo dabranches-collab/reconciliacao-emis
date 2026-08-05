@@ -8,9 +8,10 @@ import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
 import { finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
+import packageJson from '../package.json';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
-const APP_BUILD = '0.1.0';
+const APP_BUILD = packageJson.version;
 
 function Metric({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: string }) {
   return <article className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>;
