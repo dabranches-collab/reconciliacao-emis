@@ -22,6 +22,10 @@ export const saveHistorySnapshot = (result: AnalysisResult, uploadedBy: string):
   for (const item of sameDate) item.current = false;
   if (repeated) {
     repeated.current = true; repeated.uploadCount++; repeated.lastUploadedAt = now; repeated.uploadedBy = uploadedBy;
+    repeated.periodStart = result.periodStart ?? result.reportDate; repeated.filename = result.sourceFilename ?? repeated.filename;
+    repeated.totals = result.totals; repeated.movementTypes = result.movementTypes ?? {};
+    repeated.accountingBalance = result.accountingBalance; repeated.ageBuckets = result.ageBuckets; repeated.rawAmounts = result.rawAmounts;
+    repeated.reconciliationTiming = result.reconciliationTiming; repeated.dailyMetrics = result.dailyMetrics;
   } else {
     history.push({ id: crypto.randomUUID(), periodStart: result.periodStart ?? result.reportDate, reportDate: result.reportDate, filename: result.sourceFilename ?? 'ficheiro.xlsx', fileHash: hash,
       version: Math.max(0, ...sameDate.map((item) => item.version)) + 1, current: true, uploadCount: 1,
