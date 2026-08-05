@@ -133,7 +133,7 @@ function SavedResults({ revision, onImport }: { revision: number; onImport: () =
   if (!latest) return <section className="panel empty-state"><BarChart3 size={28}/><h2>Ainda não existem resultados</h2><p>Importe o primeiro extrato para criar o dashboard.</p><button className="primary-button" onClick={onImport}>Importar extrato</button></section>;
   const saved: AnalysisResult = { sourceMode: 'raw_extract', periodStart: latest.periodStart, reportDate: latest.reportDate,
     accountingBalance: latest.accountingBalance ?? null, movements: [], groups: [], totals: latest.totals, movementTypes: latest.movementTypes,
-    sourceFilename: latest.filename, ageBuckets: latest.ageBuckets, rawAmounts: latest.rawAmounts, reconciliationTiming: latest.reconciliationTiming };
+    sourceFilename: latest.filename, ageBuckets: latest.ageBuckets, rawAmounts: latest.rawAmounts, reconciliationTiming: latest.reconciliationTiming, dailyMetrics: latest.dailyMetrics };
   return <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>{latest.filename}</h2><p>Período de {latest.periodStart} a {latest.reportDate}. O detalhe integral permanece disponível na sessão em que o ficheiro foi processado.</p></div><button className="primary-button" onClick={onImport}>Importar novo extrato</button></div><Results result={saved}/></>;
 }
 

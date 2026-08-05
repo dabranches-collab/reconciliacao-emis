@@ -38,4 +38,5 @@ export interface AnalysisResult {
   ageBuckets?: Record<string, { total: number; automatic: number; unreconciled: number; amount: number }>;
   rawAmounts?: { debits: number; credits: number; net: number; openingBalance: number | null; closingBalance: number | null };
   reconciliationTiming?: { averageDays: number; totalGroups: number; buckets: Record<string, number> };
+  dailyMetrics?: Record<string, { movements: number; automatic: number; unreconciled: number; missingIdtr: number; amount: number }>;
 }

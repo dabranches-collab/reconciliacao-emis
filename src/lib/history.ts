@@ -6,6 +6,7 @@ export interface HistorySnapshot {
   totals: AnalysisResult['totals']; movementTypes: NonNullable<AnalysisResult['movementTypes']>;
   accountingBalance?: number | null; ageBuckets?: AnalysisResult['ageBuckets']; rawAmounts?: AnalysisResult['rawAmounts'];
   reconciliationTiming?: AnalysisResult['reconciliationTiming'];
+  dailyMetrics?: AnalysisResult['dailyMetrics'];
 }
 
 const KEY = 'reconciliation-realtime-raw-history-v2';
@@ -25,7 +26,7 @@ export const saveHistorySnapshot = (result: AnalysisResult, uploadedBy: string):
     history.push({ id: crypto.randomUUID(), periodStart: result.periodStart ?? result.reportDate, reportDate: result.reportDate, filename: result.sourceFilename ?? 'ficheiro.xlsx', fileHash: hash,
       version: Math.max(0, ...sameDate.map((item) => item.version)) + 1, current: true, uploadCount: 1,
       firstUploadedAt: now, lastUploadedAt: now, uploadedBy, totals: result.totals, movementTypes: result.movementTypes ?? {},
-      accountingBalance: result.accountingBalance, ageBuckets: result.ageBuckets, rawAmounts: result.rawAmounts, reconciliationTiming: result.reconciliationTiming });
+      accountingBalance: result.accountingBalance, ageBuckets: result.ageBuckets, rawAmounts: result.rawAmounts, reconciliationTiming: result.reconciliationTiming, dailyMetrics: result.dailyMetrics });
   }
   localStorage.setItem(KEY, JSON.stringify(history)); return history;
 };
