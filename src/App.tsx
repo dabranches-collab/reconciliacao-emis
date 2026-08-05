@@ -137,19 +137,12 @@ function SavedResults({ revision, onImport }: { revision: number; onImport: () =
   return <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>{latest.filename}</h2><p>Período de {latest.periodStart} a {latest.reportDate}. O detalhe integral permanece disponível na sessão em que o ficheiro foi processado.</p></div><button className="primary-button" onClick={onImport}>Importar novo extrato</button></div><Results result={saved}/></>;
 }
 
-const historicalTransitions = [
-  { period: '14 → 22 jul', initial: 61291, resolved: 59188, remaining: 2103, rate: 96.6 },
-  { period: '22 → 28 jul', initial: 86647, resolved: 86544, remaining: 6, rate: 99.9 },
-  { period: '28 → 31 jul', initial: 40133, resolved: 40127, remaining: 3, rate: 99.9 },
-];
-
 function Guide() {
   return <div className="guide-page">
     <section className="guide-hero"><div><p className="eyebrow">GUIA OPERACIONAL</p><h2>Como funciona a reconciliação</h2><p>O processo combina movimentos novos com pendências anteriores e volta a verificar cada operação na data de corte.</p></div><div className="guide-delay"><Clock3 size={25}/><strong>2–3 dias</strong><span>janela operacional habitual</span></div></section>
     <section className="guide-section"><div className="section-heading"><div><p className="eyebrow">CICLO DA ANÁLISE</p><h2>Da extração ao resultado auditável</h2></div></div><div className="process-flow">
       <article><span>1</span><strong>Extrato bruto</strong><p>Entram os movimentos novos com data, operação, valor e IDTR.</p></article><b>→</b><article><span>2</span><strong>Janela de espera</strong><p>Os processos bancários têm tempo para compensar a maioria dos pares.</p></article><b>→</b><article><span>3</span><strong>Integração</strong><p>Juntam-se movimentos novos e pendências da fotografia anterior.</p></article><b>→</b><article><span>4</span><strong>Reconciliação</strong><p>IDTR + operação + valor validam os grupos e o balanço zero.</p></article><b>→</b><article><span>5</span><strong>Resultado</strong><p>Reconciliados, N/Ok, REAL TIME e exceções ficam registados.</p></article>
     </div></section>
-    <section className="guide-section guide-chart"><div className="section-heading"><div><p className="eyebrow">EVIDÊNCIA HISTÓRICA</p><h2>O que aconteceu às pendências</h2></div><p>Percentagem das pendências que passou para reconciliada na fotografia seguinte.</p></div><div className="transition-chart" role="img" aria-label="Taxa de resolução das pendências entre as fotografias históricas">{historicalTransitions.map((item) => <div className="transition-row" key={item.period}><div><strong>{item.period}</strong><span>{item.initial.toLocaleString('pt-AO')} pendentes iniciais</span></div><div className="transition-bar"><span style={{ width: `${item.rate}%` }}/></div><div><strong>{item.rate.toLocaleString('pt-AO')}%</strong><span>{item.resolved.toLocaleString('pt-AO')} resolvidos · {item.remaining.toLocaleString('pt-AO')} ainda em REAL TIME</span></div></div>)}</div></section>
     <section className="guide-section impact-section"><div className="section-heading"><div><p className="eyebrow">ESCOLHA DA DATA</p><h2>O impacto de analisar mais cedo ou mais tarde</h2></div></div><div className="timing-grid">
       <article className="timing-early"><span>0–1 dia</span><h3>Análise antecipada</h3><p>Muitos movimentos ainda estão em trânsito e aparecem como pendências temporárias.</p><ul><li>Mais falsos alertas operacionais</li><li>Mais volume para verificação manual</li><li>Resultado disponível mais cedo</li></ul></article>
       <article className="timing-best"><span><CheckCircle2 size={15}/> 2–3 dias</span><h3>Janela recomendada</h3><p>Equilibra a maturação automática dos movimentos com a rapidez da análise.</p><ul><li>Maior taxa de reconciliação</li><li>Menos trabalho manual desnecessário</li><li>Exceções ainda tratadas atempadamente</li></ul></article>
