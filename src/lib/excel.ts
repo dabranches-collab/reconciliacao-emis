@@ -1,5 +1,6 @@
 import type { AnalysisResult, Movement } from '../types';
 import { normalizeIdtr, reconcile } from './reconciliation';
+import { classifyMovement, type MovementTypeKey } from './movementType';
 
 export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number }
 const yieldToInterface = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -54,6 +55,9 @@ export async function analyzeWorkbook(file: File, onProgress?: (progress: Analys
   onProgress?.({ percent: 46, stage: `${movements.length.toLocaleString('pt-AO')} movimentos pendentes lidos` });
   await yieldToInterface();
   const reconciledMovements: Movement[] = [];
+  const recTotals = { movements: 0, automatic: 0, unreconciled: 0, missingIdtr: 0, amountCents: 0 };
+  const sampleCounts = { automatic: 0, unreconciled: 0, missing_idtr: 0 };
+  const movementTypes = Object.fromEntries((['pos', 'atm', 'transfer', 'commission', 'service', 'other'] as MovementTypeKey[]).map((key) => [key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
   const recSheet = workbook.Sheets.REC;
   if (recSheet) {
     const recRows = XLSX.utils.sheet_to_json<unknown[]>(recSheet, { header: 1, raw: true, defval: null });
@@ -68,7 +72,7 @@ export async function analyzeWorkbook(file: File, onProgress?: (progress: Analys
       // No ficheiro de origem, "Ok" e "OK" são a mesma classificação;
       // a capitalização varia por introdução manual e não identifica a origem.
       const status = !idtr ? 'missing_idtr' : workbookStatus.toLowerCase() === 'ok' ? 'automatic' : 'unreconciled';
-      reconciledMovements.push({
+      const movement: Movement = {
         id: `${file.name}:REC:${index + 2}`,
         row: index + 2,
         reportDate: isoDate(row[0]),
@@ -80,7 +84,21 @@ export async function analyzeWorkbook(file: File, onProgress?: (progress: Analys
         complementaryInfo: info,
         idtr,
         status,
-      });
+      };
+      recTotals.movements++;
+      recTotals.amountCents += Math.round(amount * 100);
+      if (status === 'automatic') recTotals.automatic++;
+      else if (status === 'missing_idtr') recTotals.missingIdtr++;
+      else recTotals.unreconciled++;
+      const category = movementTypes[classifyMovement(movement.description)];
+      category.total++;
+      if (status === 'automatic') category.reconciled++;
+      else if (status === 'missing_idtr') category.missingIdtr++;
+      else category.unreconciled++;
+      if (sampleCounts[status] < 300) {
+        reconciledMovements.push(movement);
+        sampleCounts[status]++;
+      }
       if (index % 20000 === 0) {
         onProgress?.({ percent: 48 + Math.round((index / recRows.length) * 37), stage: 'A ler movimentos reconciliados', processed: index, total: recRows.length });
         await yieldToInterface();
@@ -95,6 +113,13 @@ export async function analyzeWorkbook(file: File, onProgress?: (progress: Analys
   const movementDates = movements.map((movement) => movement.reportDate).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
   const effectiveReportDate = movementDates.sort().at(-1) ?? reportDate;
   const realTimeResult = reconcile(movements, accountingBalance, effectiveReportDate);
+  for (const movement of realTimeResult.movements) {
+    const category = movementTypes[classifyMovement(movement.description)];
+    category.total++;
+    if (movement.status === 'automatic') category.reconciled++;
+    else if (movement.status === 'missing_idtr') category.missingIdtr++;
+    else category.unreconciled++;
+  }
   onProgress?.({ percent: 95, stage: 'A preparar indicadores e dashboard' });
   await yieldToInterface();
   const allMovements = [...reconciledMovements, ...realTimeResult.movements];
@@ -102,13 +127,14 @@ export async function analyzeWorkbook(file: File, onProgress?: (progress: Analys
     ...realTimeResult,
     movements: allMovements,
     totals: {
-      movements: allMovements.length,
-      automatic: allMovements.filter((movement) => movement.status === 'automatic').length,
-      manual: allMovements.filter((movement) => movement.status === 'manual').length,
-      unreconciled: allMovements.filter((movement) => movement.status === 'unreconciled').length,
-      missingIdtr: allMovements.filter((movement) => movement.status === 'missing_idtr').length,
-      amount: allMovements.reduce((sum, movement) => sum + Math.round(movement.amount * 100), 0) / 100,
+      movements: recTotals.movements + realTimeResult.totals.movements,
+      automatic: recTotals.automatic + realTimeResult.totals.automatic,
+      manual: 0,
+      unreconciled: recTotals.unreconciled + realTimeResult.totals.unreconciled,
+      missingIdtr: recTotals.missingIdtr + realTimeResult.totals.missingIdtr,
+      amount: (recTotals.amountCents + Math.round(realTimeResult.totals.amount * 100)) / 100,
     },
+    movementTypes,
   };
   onProgress?.({ percent: 100, stage: 'Análise concluída' });
   return result;
