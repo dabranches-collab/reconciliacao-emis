@@ -32,6 +32,10 @@ function movementType(description: string): typeof movementTypes[number]['key'] 
 function Results({ result }: { result: AnalysisResult }) {
   const [filter, setFilter] = useState('all');
   const rows = useMemo(() => result.movements.filter((m) => filter === 'all' || m.status === filter).slice(0, 250), [result, filter]);
+  const missingBySheet = useMemo(() => result.movements.reduce((counts, movement) => {
+    if (movement.status === 'missing_idtr') movement.id.includes(':REC:') ? counts.rec++ : counts.realTime++;
+    return counts;
+  }, { realTime: 0, rec: 0 }), [result]);
   const typeSummaries = useMemo(() => {
     const counts = new Map(movementTypes.map((type) => [type.key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
     for (const movement of result.movements) {
@@ -53,7 +57,7 @@ function Results({ result }: { result: AnalysisResult }) {
       <Metric label="Reconciliados automaticamente" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
       <Metric label="Reconciliados manualmente" value={result.totals.manual.toLocaleString('pt-AO')} tone="manual" />
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
-      <Metric label="Sem IDTR" value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
+      <Metric label={`Sem IDTR (${missingBySheet.realTime} REAL TIME + ${missingBySheet.rec} REC)`} value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
     <section className="balance-card">
       <div><span>Saldo dos movimentos</span><strong>{money.format(result.totals.amount)}</strong></div>
