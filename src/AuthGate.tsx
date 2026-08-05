@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js';
 import { LockKeyhole } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { logPlatformAccess } from './lib/database';
 
 type Identity = { name: string; email: string; role: 'administrator' | 'analyst' | 'auditor'; isAdmin: boolean };
 const demoIdentity: Identity = { name: 'Diogo Abranches', email: 'dabranches@gmail.com', role: 'administrator', isAdmin: true };
@@ -21,14 +22,15 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     const loadIdentity = async (nextSession: Session | null) => {
       setSession(nextSession);
       if (!nextSession) return;
-      const { data: profile } = await client.from('profiles').select('full_name,email,role').eq('id', nextSession.user.id).maybeSingle();
+      const { data: profile } = await client.from('profiles').select('full_name,email,role,is_active').eq('id', nextSession.user.id).maybeSingle();
+      if(profile&&!profile.is_active){await client.auth.signOut();setError('Esta conta encontra-se suspensa.');return;}
       const email = profile?.email ?? nextSession.user.email ?? '';
       const role = profile?.role ?? (email.toLowerCase() === 'dabranches@gmail.com' ? 'administrator' : 'analyst');
       const name = profile?.full_name || nextSession.user.user_metadata.full_name || (email.toLowerCase() === 'dabranches@gmail.com' ? 'Diogo Abranches' : email.split('@')[0]);
       setIdentity({ name, email, role, isAdmin: role === 'administrator' });
     };
     void client.auth.getSession().then(async ({ data }) => { await loadIdentity(data.session); setLoading(false); });
-    const { data } = client.auth.onAuthStateChange((_event, nextSession) => { void loadIdentity(nextSession); });
+    const { data } = client.auth.onAuthStateChange((event, nextSession) => { void loadIdentity(nextSession);if(event==='SIGNED_IN')void logPlatformAccess(); });
     return () => data.subscription.unsubscribe();
   }, []);
   if (!client) return <AuthContext.Provider value={demoIdentity}>{children}</AuthContext.Provider>;

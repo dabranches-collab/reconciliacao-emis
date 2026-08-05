@@ -22,6 +22,8 @@ create table public.analyses (
   currency text not null default 'AOA',
   current_report_date date,
   accounting_balance numeric(20,2),
+  period_start date,
+  result_summary jsonb not null default '{}'::jsonb,
   status public.analysis_status not null default 'processing',
   created_by uuid not null references public.profiles(id),
   created_at timestamptz not null default now(),
@@ -50,18 +52,32 @@ create table public.movements (
   batch_id uuid not null references public.import_batches(id) on delete restrict,
   source_row integer not null,
   movement_date date,
+  movement_time time,
+  accounting_date date,
   account text,
   amount numeric(20,2) not null,
   currency text not null default 'AOA',
   operation_number text,
   description text,
   complementary_info text,
+  balance numeric(20,2),
   idtr text,
   fingerprint text not null,
   status public.reconciliation_status not null default 'unreconciled',
   reconciliation_group_id uuid,
   created_at timestamptz not null default now(),
   unique (analysis_id, fingerprint)
+);
+
+create table public.daily_metrics (
+  analysis_id uuid not null references public.analyses(id) on delete cascade,
+  metric_date date not null,
+  movements integer not null default 0,
+  automatic integer not null default 0,
+  unreconciled integer not null default 0,
+  missing_idtr integer not null default 0,
+  amount numeric(20,2) not null default 0,
+  primary key (analysis_id, metric_date)
 );
 
 create table public.reconciliation_groups (
@@ -104,6 +120,7 @@ create index movements_analysis_status_idx on public.movements (analysis_id, sta
 create index movements_analysis_idtr_idx on public.movements (analysis_id, idtr);
 create index audit_logs_filter_idx on public.audit_logs (created_at desc, actor_id, action);
 create index batches_analysis_date_idx on public.import_batches (analysis_id, report_date desc);
+create index movements_analysis_date_idx on public.movements (analysis_id, accounting_date desc, movement_time);
 
 create or replace function private.is_admin()
 returns boolean
@@ -115,6 +132,16 @@ as $$ select exists (select 1 from public.profiles where id = (select auth.uid()
 revoke all on function private.is_admin() from public;
 grant usage on schema private to authenticated;
 grant execute on function private.is_admin() to authenticated;
+
+create or replace function private.is_active_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$ select exists (select 1 from public.profiles where id = (select auth.uid()) and is_active); $$;
+revoke all on function private.is_active_user() from public;
+grant execute on function private.is_active_user() to authenticated;
 
 create or replace function private.handle_new_user()
 returns trigger
@@ -141,30 +168,37 @@ alter table public.movements enable row level security;
 alter table public.reconciliation_groups enable row level security;
 alter table public.reconciliation_group_movements enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.daily_metrics enable row level security;
 
 create policy profiles_read on public.profiles for select to authenticated using (id = (select auth.uid()) or (select private.is_admin()));
 create policy profiles_admin_update on public.profiles for update to authenticated using ((select private.is_admin())) with check ((select private.is_admin()));
-create policy analyses_read on public.analyses for select to authenticated using (true);
-create policy analyses_write on public.analyses for insert to authenticated with check (created_by = (select auth.uid()));
-create policy analyses_update on public.analyses for update to authenticated using (true) with check (true);
-create policy batches_read on public.import_batches for select to authenticated using (true);
+create policy analyses_read on public.analyses for select to authenticated using ((select private.is_active_user()));
+create policy analyses_write on public.analyses for insert to authenticated with check ((select private.is_active_user()) and created_by = (select auth.uid()));
+create policy analyses_update on public.analyses for update to authenticated using (created_by = (select auth.uid()) or (select private.is_admin())) with check (created_by = (select auth.uid()) or (select private.is_admin()));
+create policy batches_read on public.import_batches for select to authenticated using ((select private.is_active_user()));
 create policy batches_write on public.import_batches for insert to authenticated with check (uploaded_by = (select auth.uid()));
-create policy movements_read on public.movements for select to authenticated using (true);
+create policy batches_update on public.import_batches for update to authenticated using (uploaded_by = (select auth.uid()) or (select private.is_admin())) with check (uploaded_by = (select auth.uid()) or (select private.is_admin()));
+create policy movements_read on public.movements for select to authenticated using ((select private.is_active_user()));
 create policy movements_insert on public.movements for insert to authenticated with check (exists (select 1 from public.import_batches b where b.id = batch_id and b.uploaded_by = (select auth.uid())));
-create policy movements_update on public.movements for update to authenticated using (true) with check (true);
-create policy groups_read on public.reconciliation_groups for select to authenticated using (true);
-create policy groups_write on public.reconciliation_groups for insert to authenticated with check (reconciled_by is null or reconciled_by = (select auth.uid()));
-create policy groups_update on public.reconciliation_groups for update to authenticated using (true) with check (reconciled_by is null or reconciled_by = (select auth.uid()) or (select private.is_admin()));
-create policy group_movements_read on public.reconciliation_group_movements for select to authenticated using (true);
-create policy group_movements_write on public.reconciliation_group_movements for insert to authenticated with check (true);
+create policy groups_read on public.reconciliation_groups for select to authenticated using ((select private.is_active_user()));
+create policy groups_write on public.reconciliation_groups for insert to authenticated with check ((reconciled_by is null or reconciled_by = (select auth.uid())) and exists (select 1 from public.analyses a where a.id = analysis_id and (a.created_by = (select auth.uid()) or (select private.is_admin()))));
+create policy groups_update on public.reconciliation_groups for update to authenticated using (reconciled_by = (select auth.uid()) or (select private.is_admin())) with check (reconciled_by = (select auth.uid()) or (select private.is_admin()));
+create policy group_movements_read on public.reconciliation_group_movements for select to authenticated using ((select private.is_active_user()));
+create policy group_movements_write on public.reconciliation_group_movements for insert to authenticated with check (exists (select 1 from public.reconciliation_groups g join public.analyses a on a.id = g.analysis_id where g.id = group_id and (a.created_by = (select auth.uid()) or (select private.is_admin()))));
 create policy audit_read on public.audit_logs for select to authenticated using ((select private.is_admin()) or actor_id = (select auth.uid()));
+create policy audit_insert on public.audit_logs for insert to authenticated with check (actor_id = (select auth.uid()));
+create policy daily_metrics_read on public.daily_metrics for select to authenticated using ((select private.is_active_user()));
+create policy daily_metrics_write on public.daily_metrics for insert to authenticated with check (exists (select 1 from public.analyses a where a.id = analysis_id and (a.created_by = (select auth.uid()) or (select private.is_admin()))));
+create policy daily_metrics_update on public.daily_metrics for update to authenticated using (exists (select 1 from public.analyses a where a.id = analysis_id and (a.created_by = (select auth.uid()) or (select private.is_admin())))) with check (exists (select 1 from public.analyses a where a.id = analysis_id and (a.created_by = (select auth.uid()) or (select private.is_admin()))));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('reconciliation-files', 'reconciliation-files', false, 104857600, array['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'])
+values ('reconciliation-files', 'reconciliation-files', false, 262144000, array['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'])
 on conflict (id) do nothing;
 
 create policy reconciliation_files_read on storage.objects for select to authenticated using (bucket_id = 'reconciliation-files');
 create policy reconciliation_files_insert on storage.objects for insert to authenticated with check (bucket_id = 'reconciliation-files' and (storage.foldername(name))[1] = (select auth.uid()::text));
 
-grant select, insert, update on public.profiles, public.analyses, public.import_batches, public.movements, public.reconciliation_groups, public.reconciliation_group_movements to authenticated;
-grant select on public.audit_logs to authenticated;
+grant select, insert, update on public.profiles, public.analyses, public.import_batches, public.reconciliation_groups to authenticated;
+grant select, insert on public.movements, public.reconciliation_group_movements to authenticated;
+grant select, insert on public.audit_logs to authenticated;
+grant select, insert, update on public.daily_metrics to authenticated;

@@ -8,6 +8,7 @@ import { currentHistory, loadHistory, saveHistorySnapshot } from './lib/history'
 import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
+import { finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
 const LAST_RESULT_KEY = 'reconciliation-realtime-last-result-v1';
@@ -159,10 +160,12 @@ export default function App() {
   const [historyRevision, setHistoryRevision] = useState(0);
   useEffect(() => { sessionStorage.setItem('reconciliation-active-tool', tool); }, [tool]);
   useEffect(() => { sessionStorage.setItem('reconciliation-active-view', view); }, [view]);
+  useEffect(()=>{let active=true;void loadPersistentResult().then(persisted=>{if(active&&persisted){setResult(persisted);saveLastResult(persisted);}}).catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'Não foi possível carregar os dados centrais.');});return()=>{active=false};},[]);
   const process = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
-    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes }))); setResult(analyzed); saveLastResult(analyzed); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
+    let persistence:PersistenceContext|undefined;
+    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })),async hash=>{const prepared=await preparePersistentImport(file,hash);persistence=prepared.context;return prepared;});if(!persistence)throw new Error('Não foi possível preparar a importação central.');setProgress(previous=>({...previous,percent:99,stage:'A finalizar a importação na base central'}));await finalizePersistentImport(analyzed,persistence);const persisted=await loadPersistentResult();const finalResult=persisted??analyzed;setResult(finalResult); saveLastResult(finalResult); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'movements' ? 'Consulta e extração de movimentos' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';

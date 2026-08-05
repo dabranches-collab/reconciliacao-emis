@@ -2,6 +2,7 @@ import type { AnalysisResult, Movement, ReconciliationStatus } from '../types';
 import { normalizeIdtr } from './reconciliation';
 import { classifyMovement, type MovementTypeKey } from './movementType';
 import type { AnalysisProgress } from './excel';
+import type { PersistenceContext } from './database';
 
 type ZipEntry = { name:string; method:number; compressedSize:number; offset:number };
 type TypeTotals = { total:number; reconciled:number; unreconciled:number; missingIdtr:number };
@@ -9,6 +10,13 @@ const decoder = new TextDecoder();
 const xmlText = (value:string) => value.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
 const iso = (value:unknown) => { const s=String(value??'').replace(/\D/g,''); return s.length===8?`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6)}`:''; };
 const colIndex = (ref:string) => { let n=0; for(const c of ref.match(/[A-Z]+/)?.[0]??'') n=n*26+c.charCodeAt(0)-64; return n-1; };
+const timeValue=(value:unknown)=>{const digits=String(value??'').replace(/\D/g,'').padStart(6,'0').slice(-6);return `${digits.slice(0,2)}:${digits.slice(2,4)}:${digits.slice(4)}`;};
+const fingerprint=(values:unknown[])=>{let a=2166136261,b=2246822507;const text=values.map(value=>String(value??'').trim()).join('\u001f');for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b^code,3266489917);}return `${(a>>>0).toString(16).padStart(8,'0')}${(b>>>0).toString(16).padStart(8,'0')}`;};
+async function persistMovements(context:PersistenceContext,rows:Record<string,unknown>[]){
+  if(!rows.length)return;
+  const response=await fetch(`${context.url}/rest/v1/movements?on_conflict=analysis_id,fingerprint`,{method:'POST',headers:{apikey:context.key,Authorization:`Bearer ${context.accessToken}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  if(!response.ok)throw new Error(`Não foi possível guardar os movimentos na base central (${response.status}): ${await response.text()}`);
+}
 
 function entries(buffer:ArrayBuffer):ZipEntry[]{
   const bytes=new Uint8Array(buffer), view=new DataView(buffer); let eocd=-1;
@@ -48,7 +56,7 @@ async function scanRows(buffer:ArrayBuffer, entry:ZipEntry, shared:string[], onR
   }
 }
 
-export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onProgress:(p:AnalysisProgress)=>void):Promise<AnalysisResult>{
+export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onProgress:(p:AnalysisProgress)=>void,persistence?:PersistenceContext):Promise<AnalysisResult>{
   const zip=entries(buffer), sheet=zip.find(e=>e.name==='xl/worksheets/sheet1.xml'), strings=zip.find(e=>e.name==='xl/sharedStrings.xml');
   if(!sheet||!strings) throw new Error('Não foi encontrada a folha principal ou o dicionário do extrato.');
   onProgress({percent:4,stage:'A ler o dicionário do extrato'}); const shared=parseStrings(await entryText(buffer,strings));
@@ -69,7 +77,7 @@ export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onPro
   const reportDate=maxAccounting||maxOperational, samples:Movement[]=[], sampleCounts:Record<ReconciliationStatus,number>={automatic:0,manual:0,unreconciled:0,missing_idtr:0,data_error:0};
   const totals={movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amountCents:0}; let debitCents=0,creditCents=0; const ageBuckets:Record<string,{total:number;automatic:number;unreconciled:number;amount:number}>={};
   const dailyCents:Record<string,{movements:number;automatic:number;unreconciled:number;missingIdtr:number;amount:number}>={};
-  onProgress({percent:52,stage:'A validar grupos e calcular a idade das pendências'}); let processed=0;
+  onProgress({percent:52,stage:persistence?'A validar e guardar movimentos na base central':'A validar grupos e calcular a idade das pendências'}); let processed=0;const databaseRows:Record<string,unknown>[]=[];
   await scanRows(buffer,sheet,shared,async(row,n)=>{
     if(n<=header) return; const signed=Number(row[9]); if(!Number.isFinite(signed)) return; processed++;
     const idtr=normalizeIdtr(row[21]), status:ReconciliationStatus=!idtr?'missing_idtr':groups.get(idtr)?.[0]===0?'automatic':'unreconciled';
@@ -78,9 +86,11 @@ export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onPro
     totals.movements++;totals.amountCents+=Math.round(signed*100);if(signed<0)debitCents+=Math.abs(Math.round(signed*100));else creditCents+=Math.round(signed*100);if(status==='automatic')totals.automatic++;else if(status==='missing_idtr')totals.missingIdtr++;else totals.unreconciled++;
     const accounting=iso(row[16])||operational; if(accounting){const day=dailyCents[accounting]??={movements:0,automatic:0,unreconciled:0,missingIdtr:0,amount:0};day.movements++;day.amount+=Math.round(signed*100);if(status==='automatic')day.automatic++;else if(status==='missing_idtr')day.missingIdtr++;else day.unreconciled++;}
     const description=String(row[11]??''), t=types[classifyMovement(description)];t.total++;if(status==='automatic')t.reconciled++;else if(status==='missing_idtr')t.missingIdtr++;else t.unreconciled++;
+    if(persistence){const account=String(row[1]??''),operation=String(row[7]??''),complementary=String(row[21]??''),accounting=iso(row[16])||operational;databaseRows.push({analysis_id:persistence.analysisId,batch_id:persistence.batchId,source_row:n,movement_date:operational||null,movement_time:timeValue(row[15]),accounting_date:accounting||null,account,amount:signed,currency:String(row[10]??'AOA'),operation_number:operation,description,complementary_info:complementary,balance:Number.isFinite(Number(row[12]))?Number(row[12]):null,idtr,status,fingerprint:fingerprint([operational,timeValue(row[15]),account,operation,signed,description,complementary])});if(databaseRows.length>=1000){await persistMovements(persistence,databaseRows.splice(0,databaseRows.length));}}
     if(sampleCounts[status]<300){samples.push({id:`${fileName}:${n}`,row:n,reportDate:operational,account:String(row[1]??''),amount:signed,currency:String(row[10]??''),operationNumber:String(row[7]??''),description,complementaryInfo:String(row[21]??''),idtr,status});sampleCounts[status]++;}
     if(processed%10000===0) onProgress({percent:52+Math.round((processed/Math.max(1,valid))*46),stage:'A validar movimentos e calcular indicadores',processed,total:valid,liveTotals:{movements:totals.movements,automatic:totals.automatic,unreconciled:totals.unreconciled,missingIdtr:totals.missingIdtr},liveMovementTypes:types});
   });
+  if(persistence&&databaseRows.length)await persistMovements(persistence,databaseRows);
   onProgress({percent:100,stage:'Análise do extrato concluída'});
   const dailyMetrics=Object.fromEntries(Object.entries(dailyCents).map(([day,value])=>[day,{...value,amount:value.amount/100}]));
   return {sourceMode:'raw_extract',periodStart:minOperational,reportDate,accountingBalance:closingBalance,movements:samples,groups:[],totals:{movements:totals.movements,automatic:totals.automatic,manual:0,unreconciled:totals.unreconciled,missingIdtr:totals.missingIdtr,amount:totals.amountCents/100},movementTypes:types,ageBuckets,rawAmounts:{debits:debitCents/100,credits:creditCents/100,net:totals.amountCents/100,openingBalance,closingBalance},reconciliationTiming:{averageDays:timingGroups?timingDays/timingGroups:0,totalGroups:timingGroups,buckets:timingBuckets},dailyMetrics};
