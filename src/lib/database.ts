@@ -44,14 +44,17 @@ const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:
 export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string})|null>{
   const latest=await supabase.from('analyses').select('id,result_summary').eq('name','Reconciliação Real Time').eq('status','completed').order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(latest.error)throw latest.error;if(!latest.data)return null;
-  let movementsQuery=await supabase.from('movements').select('id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status').eq('analysis_id',latest.data.id).in('status',['unreconciled','missing_idtr']).order('accounting_date',{ascending:false}).limit(1000);
-  if(movementsQuery.error)throw movementsQuery.error;
-  if(!movementsQuery.data.length)movementsQuery=await supabase.from('movements').select('id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status').eq('analysis_id',latest.data.id).order('accounting_date',{ascending:false}).limit(1000);
-  const lastBatch=await supabase.from('import_batches').select('uploaded_at,uploaded_by,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',latest.data.id).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
+  const analysisId=latest.data.id;
+  const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
+  const states:Movement['status'][]=['unreconciled','missing_idtr','automatic','manual','data_error'];
+  const stateQueries=await Promise.all(states.map(status=>supabase.from('movements').select(movementColumns).eq('analysis_id',analysisId).eq('status',status).order('accounting_date',{ascending:false}).limit(1000)));
+  const failed=stateQueries.find(query=>query.error);if(failed?.error)throw failed.error;
+  const movementRows=stateQueries.flatMap(query=>query.data??[]);
+  const lastBatch=await supabase.from('import_batches').select('uploaded_at,uploaded_by,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
   if(lastBatch.error)throw lastBatch.error;
   const profile=lastBatch.data?.profiles as unknown as {full_name?:string;email?:string}|null;
   const summary=latest.data.result_summary as AnalysisResult;
-  return{...summary,analysisId:latest.data.id,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movements:(movementsQuery.data??[]).map(row=>dbMovement(row as Record<string,unknown>))};
+  return{...summary,analysisId,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movements:movementRows.map(row=>dbMovement(row as Record<string,unknown>))};
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
