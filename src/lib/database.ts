@@ -45,15 +45,19 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
   const latest=await supabase.from('analyses').select('id,result_summary').eq('name','Reconciliação Real Time').eq('status','completed').order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(latest.error)throw latest.error;if(!latest.data)return null;
   const analysisId=latest.data.id;
+  const summary=latest.data.result_summary as AnalysisResult;
   const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
-  const states:Movement['status'][]=['unreconciled','missing_idtr','automatic','manual','data_error'];
+  const states:Movement['status'][]=[];
+  if(summary.totals.unreconciled>0)states.push('unreconciled');
+  if(summary.totals.missingIdtr>0)states.push('missing_idtr');
+  if(summary.totals.automatic>0)states.push('automatic');
+  if(summary.totals.manual>0)states.push('manual');
   const stateQueries=await Promise.all(states.map(status=>supabase.from('movements').select(movementColumns).eq('analysis_id',analysisId).eq('status',status).order('accounting_date',{ascending:false}).limit(1000)));
   const failed=stateQueries.find(query=>query.error);if(failed?.error)throw failed.error;
   const movementRows=stateQueries.flatMap(query=>query.data??[]);
   const lastBatch=await supabase.from('import_batches').select('uploaded_at,uploaded_by,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
   if(lastBatch.error)throw lastBatch.error;
   const profile=lastBatch.data?.profiles as unknown as {full_name?:string;email?:string}|null;
-  const summary=latest.data.result_summary as AnalysisResult;
   return{...summary,analysisId,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movements:movementRows.map(row=>dbMovement(row as Record<string,unknown>))};
 }
 
