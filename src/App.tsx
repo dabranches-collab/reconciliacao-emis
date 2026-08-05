@@ -4,24 +4,13 @@ import type { AnalysisResult } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
 import { classifyMovement } from './lib/movementType';
-import { currentHistory, loadHistory, saveHistorySnapshot } from './lib/history';
 import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
 import { finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
-const LAST_RESULT_KEY = 'reconciliation-realtime-last-result-v1';
 const APP_BUILD = '0.1.0';
-
-function loadLastResult(): AnalysisResult | null {
-  try { return JSON.parse(sessionStorage.getItem(LAST_RESULT_KEY) ?? 'null') as AnalysisResult | null; }
-  catch { sessionStorage.removeItem(LAST_RESULT_KEY); return null; }
-}
-function saveLastResult(result: AnalysisResult) {
-  try { sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(result)); }
-  catch { /* O resultado atual continua disponível mesmo se o browser limitar o armazenamento da sessão. */ }
-}
 
 function Metric({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: string }) {
   return <article className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>;
@@ -116,12 +105,7 @@ function ProcessingDashboard({ fileName, progress }: { fileName: string; progres
 
 function SavedResults({ revision, onImport }: { revision: number; onImport: () => void }) {
   void revision;
-  const latest = currentHistory(loadHistory()).at(-1);
-  if (!latest) return <section className="panel empty-state"><BarChart3 size={28}/><h2>Ainda não existem resultados</h2><p>Importe o primeiro extrato para criar o dashboard.</p><button className="primary-button" onClick={onImport}>Importar extrato</button></section>;
-  const saved: AnalysisResult = { sourceMode: 'raw_extract', periodStart: latest.periodStart, reportDate: latest.reportDate,
-    accountingBalance: latest.accountingBalance ?? null, movements: [], groups: [], totals: latest.totals, movementTypes: latest.movementTypes,
-    sourceFilename: latest.filename, ageBuckets: latest.ageBuckets, rawAmounts: latest.rawAmounts, reconciliationTiming: latest.reconciliationTiming, dailyMetrics: latest.dailyMetrics };
-  return <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>{latest.filename}</h2><p>Período de {latest.periodStart} a {latest.reportDate}. O detalhe integral permanece disponível na sessão em que o ficheiro foi processado.</p></div><button className="primary-button" onClick={onImport}>Importar novo extrato</button></div><Results result={saved}/></>;
+  return <section className="panel empty-state"><BarChart3 size={28}/><h2>Ainda não existem resultados centrais</h2><p>Importe o primeiro extrato para criar o dashboard.</p><button className="primary-button" onClick={onImport}>Importar extrato</button></section>;
 }
 
 function Guide() {
@@ -149,9 +133,9 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     const saved = sessionStorage.getItem('reconciliation-active-view');
     return saved === 'import' || saved === 'results' || saved === 'movements' || saved === 'guide' || saved === 'history' || saved === 'users' || saved === 'audit'
-      ? saved : currentHistory(loadHistory()).length ? 'results' : 'import';
+      ? saved : 'import';
   });
-  const [result, setResult] = useState<AnalysisResult | null>(loadLastResult);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({ percent: 0, stage: 'A aguardar ficheiro' });
   const [processingFile, setProcessingFile] = useState('');
@@ -164,15 +148,15 @@ export default function App() {
   useEffect(() => { sessionStorage.setItem('reconciliation-active-tool', tool); }, [tool]);
   useEffect(() => { sessionStorage.setItem('reconciliation-active-view', view); }, [view]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('reconciliation-theme',theme);},[theme]);
-  useEffect(()=>{let active=true;void loadPersistentResult().then(persisted=>{if(active&&persisted){setResult(persisted);saveLastResult(persisted);}}).catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'Não foi possível carregar os dados centrais.');});return()=>{active=false};},[]);
+  useEffect(()=>{let active=true;void loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'Não foi possível carregar os dados centrais.');});return()=>{active=false};},[]);
   const process = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
     let persistence:PersistenceContext|undefined;
-    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })),async hash=>{const prepared=await preparePersistentImport(file,hash);persistence=prepared.context;return prepared;});if(!persistence)throw new Error('Não foi possível preparar a importação central.');setProgress(previous=>({...previous,percent:99,stage:'A finalizar a importação na base central'}));await finalizePersistentImport(analyzed,persistence);const persisted=await loadPersistentResult();const finalResult=persisted??analyzed;setResult(finalResult); saveLastResult(finalResult); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
+    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })),async hash=>{const prepared=await preparePersistentImport(file,hash);persistence=prepared.context;return prepared;});if(!persistence)throw new Error('Não foi possível preparar a importação central.');setProgress(previous=>({...previous,percent:99,stage:'A finalizar a importação na base central'}));await finalizePersistentImport(analyzed,persistence);const persisted=await loadPersistentResult();setResult(persisted??analyzed);setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
-  const refreshData=async()=>{if(refreshing)return;setRefreshing(true);setError('');try{const persisted=await loadPersistentResult();if(persisted){setResult(persisted);saveLastResult(persisted);}setHistoryRevision(value=>value+1);}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível atualizar os dados centrais.');}finally{setRefreshing(false);}};
+  const refreshData=async()=>{if(refreshing)return;setRefreshing(true);setError('');try{const persisted=await loadPersistentResult();if(persisted)setResult(persisted);setHistoryRevision(value=>value+1);}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível atualizar os dados centrais.');}finally{setRefreshing(false);}};
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'movements' ? 'Consulta e extração de movimentos' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
   const pageDescription = view === 'import' ? 'Importe diretamente o extrato Real Time, sem ficheiros intermédios.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'movements' ? 'Filtre, ordene e extraia os movimentos disponíveis em Excel ou PDF.' : view === 'guide' ? 'Compreenda o ciclo, as regras e o impacto da data escolhida.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   if (tool === 'portal') return <div className="tool-portal"><header><div className="portal-brand"><img className="keve-logo portal-logo" src="/keve-logo-purple.png" alt="Keve — O Banco que avança"/><div><strong>Portal de Reconciliação</strong><span>Ferramentas operacionais</span></div></div><div className="portal-user"><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.email}</span></div></div></header><main><div className="portal-heading"><p className="eyebrow">SELECIONE UMA FERRAMENTA</p><h1>Reconciliações financeiras</h1><p>Cada ferramenta mantém as suas próprias regras, importações, resultados e histórico.</p></div><div className="tool-grid"><article className="tool-card realtime"><div className="tool-card-icon"><Activity size={30}/></div><span className="tool-status available">Disponível</span><h2>Reconciliação Real Time</h2><p>Importação direta dos extratos Real Time, reconciliação automática por IDTR e tratamento auditável das exceções.</p><ul><li>Extratos Real Time</li><li>Reconciliação automática e manual</li><li>Histórico e deteção de anomalias</li></ul><button className="primary-button" onClick={() => setTool('realtime')}>Abrir ferramenta</button></article><article className="tool-card stc"><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><span className="tool-status preparing">Em preparação</span><h2>Reconciliação STC</h2><h3>Sistema de Transferências a Crédito</h3><p>Ferramenta dedicada ao tratamento e reconciliação das operações do STC, com regras e histórico independentes.</p><ul><li>Importações próprias do STC</li><li>Regras específicas de transferências</li><li>Auditoria separada</li></ul><button className="secondary-button" onClick={() => setTool('stc')}>Ver ferramenta</button></article></div></main></div>;
@@ -182,7 +166,7 @@ export default function App() {
       <nav><button className={view === 'results' ? 'active' : ''} title="Abrir o último dashboard de resultados" onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'movements' ? 'active' : ''} onClick={() => setView('movements')}><FileSpreadsheet size={19}/>Movimentos</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><BookOpen size={19}/>Como funciona</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
       <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div><div className="sidebar-build">DIOGO ABRANCHES · BUILD {APP_BUILD}</div>
     </aside>
-    <main><header className="operational-header"><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><div className="header-controls"><span className={`header-series ${coverageGaps?'warning':'ok'}`}>{coverageGaps?<><AlertTriangle size={16}/>{coverageGaps} intervalo{coverageGaps>1?'s':''} em falta</>:<><CheckCircle2 size={16}/>Série diária contínua</>}</span><button type="button" title={theme==='light'?'Ativar modo escuro':'Ativar modo claro'} aria-label={theme==='light'?'Ativar modo escuro':'Ativar modo claro'} onClick={()=>setTheme(value=>value==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button type="button" title="Atualizar dados deste ecrã" aria-label="Atualizar dados deste ecrã" disabled={refreshing} onClick={()=>void refreshData()}><RefreshCw size={18} className={refreshing?'spinning':''}/></button></div></header>
+    <main><header className="operational-header"><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><div className="header-controls"><span className={`header-series ${coverageGaps?'warning':'ok'}`}>{coverageGaps?<><AlertTriangle size={16}/>{coverageGaps} intervalo{coverageGaps>1?'s':''} em falta</>:<><CheckCircle2 size={16}/>Série diária contínua</>}</span><button type="button" title="Atualizar dados deste ecrã" aria-label="Atualizar dados deste ecrã" disabled={refreshing} onClick={()=>void refreshData()}><RefreshCw size={18} className={refreshing?'spinning':''}/></button><button type="button" title={theme==='light'?'Ativar modo escuro':'Ativar modo claro'} aria-label={theme==='light'?'Ativar modo escuro':'Ativar modo claro'} onClick={()=>setTheme(value=>value==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button></div></header>
       <RealTimeOverview revision={historyRevision} result={result}/>
       {view === 'import' && <section className={`dropzone compact-dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
         <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o extrato…' : 'Arraste o extrato Real Time para aqui'}</h2><p>A plataforma lê diretamente as colunas MR, extrai o IDTR e reconcilia sem ficheiros intermédios.</p><label className="primary-button">Selecionar extrato<input type="file" accept=".xlsx" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formato aceite: extrato Real Time em XLSX</small>{error && <div className="error">{error}</div>}
@@ -191,7 +175,7 @@ export default function App() {
       {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('movements')}>Consultar movimentos</button><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><Results result={result}/></>}
       {view === 'results' && !busy && !result && <SavedResults revision={historyRevision} onImport={() => setView('import')}/>}
       {view === 'guide' && <Guide/>}
-      {view === 'history' && <HistoryDashboard revision={historyRevision}/>}
+      {view === 'history' && <HistoryDashboard result={result}/>}
       {view === 'movements' && <DataExplorer result={result} onImport={() => setView('import')}/>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
       {view === 'audit' && identity.isAdmin && <section className="panel empty-state"><Activity size={28}/><h2>Log de utilização</h2><p>As ações da plataforma serão apresentadas aqui com filtros e exportação.</p></section>}

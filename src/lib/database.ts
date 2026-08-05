@@ -2,6 +2,7 @@ import type { AnalysisResult, Movement } from '../types';
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase';
 
 export type PersistenceContext={url:string;key:string;accessToken:string;analysisId:string;batchId:string};
+export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;duplicateCount:number;errorCount:number};
 
 export async function preparePersistentImport(file:File,fileHash:string):Promise<{context:PersistenceContext;duplicate:boolean}>{
   const {data:{session}}=await supabase.auth.getSession();
@@ -55,17 +56,18 @@ export async function loadAllMovementsByStatus(analysisId:string,statuses:Moveme
   return rows;
 }
 
-export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string;movementTotal?:number})|null>{
+export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string;movementTotal?:number;importHistory:CentralImport[]})|null>{
   const latest=await supabase.from('analyses').select('id,result_summary').eq('name','Reconciliação Real Time').eq('status','completed').order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(latest.error)throw latest.error;if(!latest.data)return null;
   const analysisId=latest.data.id;
   const summary=latest.data.result_summary as AnalysisResult;
   const initialStates:Movement['status'][]=['unreconciled'];if(summary.totals.missingIdtr>0)initialStates.push('missing_idtr');
   const movementPreview=await loadMovementsByStatus(analysisId,initialStates);
-  const lastBatch=await supabase.from('import_batches').select('uploaded_at,uploaded_by,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
-  if(lastBatch.error)throw lastBatch.error;
-  const profile=lastBatch.data?.profiles as unknown as {full_name?:string;email?:string}|null;
-  return{...summary,analysisId,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movementTotal:movementPreview.total,movements:movementPreview.rows};
+  const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,duplicate_count,error_count,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
+  if(batches.error)throw batches.error;
+  const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,duplicateCount:row.duplicate_count,errorCount:row.error_count};});
+  const lastBatch=importHistory[0];
+  return{...summary,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.total,importHistory,movements:movementPreview.rows};
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
