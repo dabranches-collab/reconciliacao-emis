@@ -22,12 +22,20 @@ export async function preparePersistentImport(file:File,fileHash:string):Promise
 export async function finalizePersistentImport(result:AnalysisResult,context:PersistenceContext){
   const {data:{session}}=await supabase.auth.getSession();if(!session)throw new Error('A sessão terminou durante a importação.');
   const summary={...result,movements:[],groups:[]};
-  const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
-  if(analysisUpdate.error)throw analysisUpdate.error;
   const batchUpdate=await supabase.from('import_batches').update({report_date:result.reportDate||null,movement_count:result.totals.movements,inserted_count:result.totals.movements}).eq('id',context.batchId);
   if(batchUpdate.error)throw batchUpdate.error;
-  const metrics=Object.entries(result.dailyMetrics??{}).map(([metric_date,value])=>({analysis_id:context.analysisId,metric_date,...value,missing_idtr:value.missingIdtr}));
+  const metrics=Object.entries(result.dailyMetrics??{}).map(([metric_date,value])=>({
+    analysis_id:context.analysisId,
+    metric_date,
+    movements:value.movements,
+    automatic:value.automatic,
+    unreconciled:value.unreconciled,
+    missing_idtr:value.missingIdtr,
+    amount:value.amount,
+  }));
   if(metrics.length){const saved=await supabase.from('daily_metrics').upsert(metrics,{onConflict:'analysis_id,metric_date'});if(saved.error)throw saved.error;}
+  const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
+  if(analysisUpdate.error)throw analysisUpdate.error;
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements}});
 }
 
