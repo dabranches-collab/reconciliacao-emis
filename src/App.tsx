@@ -98,7 +98,10 @@ function ProcessingDashboard({ fileName, progress }: { fileName: string; progres
     <div className="processing-status"><span className="processing-pulse"/><strong>{progress.stage}</strong><span className="line-counter">{progress.total ? <><b>{(progress.processed ?? 0).toLocaleString('pt-AO')}</b> de <b>{progress.total.toLocaleString('pt-AO')}</b> linhas</> : <>A identificar o número de linhas<span className="counting-dots">…</span></>}</span></div>
     <div className="processing-steps">{['Receção', 'Classificados', 'Agrupamento IDTR', 'Validação', 'Dashboard'].map((label, index) => <div className={index + 1 < step ? 'done' : index + 1 === step ? 'active' : ''} key={label}><i>{index + 1 < step ? '✓' : index + 1}</i><span>{label}</span></div>)}</div>
     <div className="processing-metrics">{liveMetrics.map(([label, count]) => <article className={count !== undefined ? 'counting' : ''} key={label}><span>{label}</span>{count === undefined ? <i/> : <strong>{count.toLocaleString('pt-AO')}</strong>}</article>)}</div>
-    <div className="processing-preview"><div><h3>Resultados por tipo de movimento</h3><p>Os cartões serão preenchidos assim que cada fase terminar.</p></div><div className="processing-card-grid">{['POS', 'ATM', 'Transferências'].map((label) => <article key={label}><strong>{label}</strong><i/><i/></article>)}</div></div>
+    <div className="processing-preview"><div><h3>Resultados por tipo de movimento</h3><p>Os cartões estão a ser preenchidos à medida que cada movimento é identificado e validado.</p></div><div className="processing-card-grid">{movementTypes.map((type) => {
+      const Icon = type.icon; const counts = progress.liveMovementTypes?.[type.key];
+      return <article className={`${type.color} ${counts ? 'counting' : ''}`} key={type.key}><div className="processing-type-head"><span><Icon size={17}/></span><strong>{type.label}</strong><b>{counts?.total.toLocaleString('pt-AO') ?? '—'}</b></div>{counts ? <div className="processing-type-states"><span><b>{counts.reconciled.toLocaleString('pt-AO')}</b> reconciliados</span><span><b>{counts.unreconciled.toLocaleString('pt-AO')}</b> pendentes</span><span><b>{counts.missingIdtr.toLocaleString('pt-AO')}</b> sem IDTR</span></div> : <><i/><i/></>}</article>;
+    })}</div></div>
   </section>;
 }
 
