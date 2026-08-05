@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, FileSpreadsheet, History, Landmark, ReceiptText, Search, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
 import type { AnalysisResult, Movement } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
@@ -83,10 +83,14 @@ function Results({ result }: { result: AnalysisResult }) {
 }
 
 function ProcessingDashboard({ fileName, progress }: { fileName: string; progress: AnalysisProgress }) {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer); }, []);
+  const step = progress.percent < 10 ? 1 : progress.percent < 38 ? 2 : progress.percent < 67 ? 3 : progress.percent < 98 ? 4 : 5;
   return <section className="processing-dashboard" aria-live="polite">
-    <div className="processing-hero"><div><p className="eyebrow">ANÁLISE EM CURSO</p><h2>Estamos a processar a reconciliação</h2><p>{fileName}</p></div><strong>{progress.percent}%</strong></div>
-    <div className="processing-track"><span style={{ width: `${progress.percent}%` }}/></div>
-    <div className="processing-status"><span className="processing-pulse"/><strong>{progress.stage}</strong>{progress.processed && progress.total ? <span>{progress.processed.toLocaleString('pt-AO')} de {progress.total.toLocaleString('pt-AO')} linhas</span> : null}</div>
+    <div className="processing-hero"><div className="processing-spinner" aria-hidden="true"><i/><i/><i/></div><div><p className="eyebrow">ANÁLISE EM CURSO · MOTOR ATIVO</p><h2>Estamos a processar a reconciliação</h2><p>{fileName}</p></div><div className="processing-percent"><strong>{progress.percent}%</strong><span>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span></div></div>
+    <div className="processing-track"><span style={{ width: `${progress.percent}%` }}><i/></span></div>
+    <div className="processing-status"><span className="processing-pulse"/><strong>{progress.stage}</strong>{progress.processed && progress.total ? <span>{progress.processed.toLocaleString('pt-AO')} de {progress.total.toLocaleString('pt-AO')} linhas</span> : <span>A trabalhar · não feche esta página</span>}</div>
+    <div className="processing-steps">{['Receção', 'Classificados', 'Agrupamento IDTR', 'Validação', 'Dashboard'].map((label, index) => <div className={index + 1 < step ? 'done' : index + 1 === step ? 'active' : ''} key={label}><i>{index + 1 < step ? '✓' : index + 1}</i><span>{label}</span></div>)}</div>
     <div className="processing-metrics">{['Total movimentos', 'Reconciliados no ficheiro', 'Não reconciliados', 'Sem IDTR'].map((label) => <article key={label}><span>{label}</span><i/></article>)}</div>
     <div className="processing-preview"><div><h3>Resultados por tipo de movimento</h3><p>Os cartões serão preenchidos assim que cada fase terminar.</p></div><div className="processing-card-grid">{['POS', 'ATM', 'Transferências'].map((label) => <article key={label}><strong>{label}</strong><i/><i/></article>)}</div></div>
   </section>;
