@@ -9,6 +9,16 @@ import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
+const LAST_RESULT_KEY = 'reconciliation-realtime-last-result-v1';
+
+function loadLastResult(): AnalysisResult | null {
+  try { return JSON.parse(sessionStorage.getItem(LAST_RESULT_KEY) ?? 'null') as AnalysisResult | null; }
+  catch { sessionStorage.removeItem(LAST_RESULT_KEY); return null; }
+}
+function saveLastResult(result: AnalysisResult) {
+  try { sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(result)); }
+  catch { /* O resultado atual continua disponível mesmo se o browser limitar o armazenamento da sessão. */ }
+}
 
 function Metric({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: string }) {
   return <article className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>;
@@ -117,6 +127,16 @@ function ProcessingDashboard({ fileName, progress }: { fileName: string; progres
   </section>;
 }
 
+function SavedResults({ revision, onImport }: { revision: number; onImport: () => void }) {
+  void revision;
+  const latest = currentHistory(loadHistory()).at(-1);
+  if (!latest) return <section className="panel empty-state"><BarChart3 size={28}/><h2>Ainda não existem resultados</h2><p>Importe o primeiro extrato para criar o dashboard.</p><button className="primary-button" onClick={onImport}>Importar extrato</button></section>;
+  const saved: AnalysisResult = { sourceMode: 'raw_extract', periodStart: latest.periodStart, reportDate: latest.reportDate,
+    accountingBalance: latest.accountingBalance ?? null, movements: [], groups: [], totals: latest.totals, movementTypes: latest.movementTypes,
+    sourceFilename: latest.filename, ageBuckets: latest.ageBuckets, rawAmounts: latest.rawAmounts, reconciliationTiming: latest.reconciliationTiming };
+  return <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>{latest.filename}</h2><p>Período de {latest.periodStart} a {latest.reportDate}. O detalhe integral permanece disponível na sessão em que o ficheiro foi processado.</p></div><button className="primary-button" onClick={onImport}>Importar novo extrato</button></div><Results result={saved}/></>;
+}
+
 const historicalTransitions = [
   { period: '14 → 22 jul', initial: 61291, resolved: 59188, remaining: 2103, rate: 96.6 },
   { period: '22 → 28 jul', initial: 86647, resolved: 86544, remaining: 6, rate: 99.9 },
@@ -152,7 +172,7 @@ export default function App() {
     return saved === 'import' || saved === 'results' || saved === 'guide' || saved === 'history' || saved === 'users' || saved === 'audit'
       ? saved : currentHistory(loadHistory()).length ? 'results' : 'import';
   });
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(loadLastResult);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({ percent: 0, stage: 'A aguardar ficheiro' });
   const [processingFile, setProcessingFile] = useState('');
@@ -164,7 +184,7 @@ export default function App() {
   const process = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
-    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes }))); setResult(analyzed); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
+    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes }))); setResult(analyzed); saveLastResult(analyzed); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
@@ -183,7 +203,7 @@ export default function App() {
       </section>}
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
       {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
-      {view === 'results' && !busy && !result && <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>Resumo da reconciliação</h2><p>O dashboard permanece disponível depois de sair ou atualizar a plataforma.</p></div><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><HistoryDashboard revision={historyRevision}/></>}
+      {view === 'results' && !busy && !result && <SavedResults revision={historyRevision} onImport={() => setView('import')}/>}
       {view === 'guide' && <Guide/>}
       {view === 'history' && <HistoryDashboard revision={historyRevision}/>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
