@@ -40,25 +40,32 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
 }
 
 const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:Number(row.source_row),reportDate:String(row.movement_date??row.accounting_date??''),account:String(row.account??''),amount:Number(row.amount),currency:String(row.currency??'AOA'),operationNumber:String(row.operation_number??''),description:String(row.description??''),complementaryInfo:String(row.complementary_info??''),idtr:row.idtr?String(row.idtr):null,status:row.status as Movement['status']});
+const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
 
-export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string})|null>{
+export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0){
+  if(!statuses.length)return{rows:[] as Movement[],total:0};
+  const query=await supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).order('accounting_date',{ascending:false}).range(offset,offset+limit-1);
+  if(query.error)throw query.error;
+  return{rows:(query.data??[]).map(row=>dbMovement(row as Record<string,unknown>)),total:query.count??0};
+}
+
+export async function loadAllMovementsByStatus(analysisId:string,statuses:Movement['status'][],onProgress?:(loaded:number,total:number)=>void){
+  const rows:Movement[]=[];let total=0;
+  for(let offset=0;;offset+=1000){const page=await loadMovementsByStatus(analysisId,statuses,1000,offset);total=page.total;rows.push(...page.rows);onProgress?.(rows.length,total);if(rows.length>=total||!page.rows.length)break;}
+  return rows;
+}
+
+export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string;movementTotal?:number})|null>{
   const latest=await supabase.from('analyses').select('id,result_summary').eq('name','Reconciliação Real Time').eq('status','completed').order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(latest.error)throw latest.error;if(!latest.data)return null;
   const analysisId=latest.data.id;
   const summary=latest.data.result_summary as AnalysisResult;
-  const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
-  const states:Movement['status'][]=[];
-  if(summary.totals.unreconciled>0)states.push('unreconciled');
-  if(summary.totals.missingIdtr>0)states.push('missing_idtr');
-  if(summary.totals.automatic>0)states.push('automatic');
-  if(summary.totals.manual>0)states.push('manual');
-  const stateQueries=await Promise.all(states.map(status=>supabase.from('movements').select(movementColumns).eq('analysis_id',analysisId).eq('status',status).order('accounting_date',{ascending:false}).limit(1000)));
-  const failed=stateQueries.find(query=>query.error);if(failed?.error)throw failed.error;
-  const movementRows=stateQueries.flatMap(query=>query.data??[]);
+  const initialStates:Movement['status'][]=['unreconciled'];if(summary.totals.missingIdtr>0)initialStates.push('missing_idtr');
+  const movementPreview=await loadMovementsByStatus(analysisId,initialStates);
   const lastBatch=await supabase.from('import_batches').select('uploaded_at,uploaded_by,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
   if(lastBatch.error)throw lastBatch.error;
   const profile=lastBatch.data?.profiles as unknown as {full_name?:string;email?:string}|null;
-  return{...summary,analysisId,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movements:movementRows.map(row=>dbMovement(row as Record<string,unknown>))};
+  return{...summary,analysisId,lastUploadedAt:lastBatch.data?.uploaded_at,uploadedBy:profile?.full_name||profile?.email,movementTotal:movementPreview.total,movements:movementPreview.rows};
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
