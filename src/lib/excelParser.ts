@@ -16,6 +16,7 @@ const isoDate = (input: unknown) => {
   return raw.length === 8 ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6)}` : text(input);
 };
 const rowCount = (sheet: DenseSheet) => sheet.length;
+const yieldProgress = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const makeTypes = () => Object.fromEntries((['pos', 'atm', 'transfer', 'commission', 'service', 'other'] as MovementTypeKey[]).map((key) => [key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }])) as Record<MovementTypeKey, TypeTotals>;
 const addType = (types: Record<MovementTypeKey, TypeTotals>, description: string, status: ReconciliationStatus) => {
   const target = types[classifyMovement(description)];
@@ -68,7 +69,10 @@ export async function analyzeWorkbookBuffer(fileName: string, buffer: ArrayBuffe
       else if (movement.status === 'missing_idtr') totals.missingIdtr++;
       else totals.unreconciled++;
       addType(movementTypes, movement.description, movement.status); keep(movement);
-      if (row % 10000 === 0) onProgress({ percent: 12 + Math.round((row / totalRows) * 23), stage: 'A analisar movimentos já classificados', processed: row, total: totalRows, liveTotals: liveTotals(), liveMovementTypes: copyTypes() });
+      if (row % 10000 === 0) {
+        onProgress({ percent: 12 + Math.round((row / totalRows) * 23), stage: 'A analisar movimentos já classificados', processed: row, total: totalRows, liveTotals: liveTotals(), liveMovementTypes: copyTypes() });
+        await yieldProgress();
+      }
     }
   }
   rec = undefined;
@@ -85,7 +89,10 @@ export async function analyzeWorkbookBuffer(fileName: string, buffer: ArrayBuffe
     const movement = movementAt(rt, row, fileName, '', reportDate);
     if (movement) { rtIdentified++; rtIdentifiedTypes[classifyMovement(movement.description)]++; }
     if (movement?.idtr) groups.set(movement.idtr, (groups.get(movement.idtr) ?? 0) + Math.round(movement.amount * 100));
-    if (row % 10000 === 0) onProgress({ percent: 40 + Math.round((row / rtRows) * 25), stage: 'A agrupar movimentos por IDTR', processed: row, total: rtRows, liveTotals: { ...liveTotals(), movements: totals.movements + rtIdentified }, liveMovementTypes: copyTypes(rtIdentifiedTypes) });
+    if (row % 10000 === 0) {
+      onProgress({ percent: 40 + Math.round((row / rtRows) * 25), stage: 'A agrupar movimentos por IDTR', processed: row, total: rtRows, liveTotals: { ...liveTotals(), movements: totals.movements + rtIdentified }, liveMovementTypes: copyTypes(rtIdentifiedTypes) });
+      await yieldProgress();
+    }
   }
 
   let effectiveReportDate = reportDate;
@@ -99,7 +106,10 @@ export async function analyzeWorkbookBuffer(fileName: string, buffer: ArrayBuffe
     else if (movement.status === 'missing_idtr') totals.missingIdtr++;
     else totals.unreconciled++;
     addType(movementTypes, movement.description, movement.status); keep(movement);
-    if (row % 10000 === 0) onProgress({ percent: 67 + Math.round((row / rtRows) * 28), stage: 'A validar saldos e preparar resultados', processed: row, total: rtRows, liveTotals: liveTotals(), liveMovementTypes: copyTypes() });
+    if (row % 10000 === 0) {
+      onProgress({ percent: 67 + Math.round((row / rtRows) * 28), stage: 'A validar saldos e preparar resultados', processed: row, total: rtRows, liveTotals: liveTotals(), liveMovementTypes: copyTypes() });
+      await yieldProgress();
+    }
   }
 
   onProgress({ percent: 98, stage: 'A construir o dashboard' });
