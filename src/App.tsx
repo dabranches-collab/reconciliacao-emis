@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Activity, ArrowLeftRight, BarChart3, CircleEllipsis, CreditCard, FileSpreadsheet, History, Landmark, ReceiptText, Search, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
 import type { AnalysisResult, Movement } from './types';
-import { analyzeWorkbook } from './lib/excel';
+import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
@@ -90,31 +90,44 @@ function Results({ result }: { result: AnalysisResult }) {
   </>;
 }
 
+function ProcessingDashboard({ fileName, progress }: { fileName: string; progress: AnalysisProgress }) {
+  return <section className="processing-dashboard" aria-live="polite">
+    <div className="processing-hero"><div><p className="eyebrow">ANÁLISE EM CURSO</p><h2>Estamos a processar a reconciliação</h2><p>{fileName}</p></div><strong>{progress.percent}%</strong></div>
+    <div className="processing-track"><span style={{ width: `${progress.percent}%` }}/></div>
+    <div className="processing-status"><span className="processing-pulse"/><strong>{progress.stage}</strong>{progress.processed && progress.total ? <span>{progress.processed.toLocaleString('pt-AO')} de {progress.total.toLocaleString('pt-AO')} linhas</span> : null}</div>
+    <div className="processing-metrics">{['Total movimentos', 'Reconciliados no ficheiro', 'Não reconciliados', 'Sem IDTR'].map((label) => <article key={label}><span>{label}</span><i/></article>)}</div>
+    <div className="processing-preview"><div><h3>Resultados por tipo de movimento</h3><p>Os cartões serão preenchidos assim que cada fase terminar.</p></div><div className="processing-card-grid">{['POS', 'ATM', 'Transferências'].map((label) => <article key={label}><strong>{label}</strong><i/><i/></article>)}</div></div>
+  </section>;
+}
+
 export default function App() {
   const identity = useAuth();
   const [view, setView] = useState<'import' | 'results' | 'history' | 'users' | 'audit'>('import');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<AnalysisProgress>({ percent: 0, stage: 'A aguardar ficheiro' });
+  const [processingFile, setProcessingFile] = useState('');
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const process = async (file?: File) => {
     if (!file) return;
-    setBusy(true); setError('');
-    try { setResult(await analyzeWorkbook(file)); setView('results'); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); }
+    setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
+    try { setResult(await analyzeWorkbook(file, setProgress)); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
   const pageDescription = view === 'import' ? 'Arraste o ficheiro diário e receba os resultados automaticamente.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   return <div className="app-shell">
     <aside><div className="brand"><div className="brand-mark">R</div><div><strong>Reconciliação</strong><span>EMIS Real Time</span></div></div>
-      <nav><button className={view === 'results' ? 'active' : ''} disabled={!result} title={result ? 'Voltar aos resultados da reconciliação' : 'Carregue primeiro um ficheiro'} onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
+      <nav><button className={view === 'results' ? 'active' : ''} disabled={!result && !busy} title={result || busy ? 'Voltar aos resultados da reconciliação' : 'Carregue primeiro um ficheiro'} onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
       <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
     </aside>
     <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
       {view === 'import' && <section className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
         <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o ficheiro…' : 'Arraste o ficheiro Excel para aqui'}</h2><p>A plataforma identifica automaticamente a data, movimentos, IDTR e saldo contabilístico.</p><label className="primary-button">Selecionar ficheiro<input type="file" accept=".xlsx,.xls,.xlsm" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formatos aceites: XLSX, XLS e XLSM</small>{error && <div className="error">{error}</div>}
       </section>}
-      {view === 'results' && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
+      {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
+      {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
       {view === 'history' && <section className="panel empty-state"><FileSpreadsheet size={28}/><h2>Ainda não existem análises guardadas</h2><p>Os carregamentos persistidos aparecerão aqui por data e lote.</p><button className="primary-button" onClick={() => setView('import')}>Importar primeiro ficheiro</button></section>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
       {view === 'audit' && identity.isAdmin && <section className="panel empty-state"><Activity size={28}/><h2>Log de utilização</h2><p>As ações da plataforma serão apresentadas aqui com filtros e exportação.</p></section>}

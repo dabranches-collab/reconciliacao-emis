@@ -1,6 +1,9 @@
 import type { AnalysisResult, Movement } from '../types';
 import { normalizeIdtr, reconcile } from './reconciliation';
 
+export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number }
+const yieldToInterface = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 const text = (value: unknown) => String(value ?? '').trim();
 const numeric = (value: unknown) => typeof value === 'number' ? value : Number(String(value ?? '').replace(/\s/g, '').replace(',', '.'));
 const isoDate = (value: unknown) => {
@@ -8,9 +11,16 @@ const isoDate = (value: unknown) => {
   return raw.length === 8 ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6)}` : text(value);
 };
 
-export async function analyzeWorkbook(file: File): Promise<AnalysisResult> {
+export async function analyzeWorkbook(file: File, onProgress?: (progress: AnalysisProgress) => void): Promise<AnalysisResult> {
+  onProgress?.({ percent: 3, stage: 'A preparar o ficheiro' });
+  await yieldToInterface();
   const XLSX = await import('xlsx');
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', dense: true, cellDates: true });
+  const fileBuffer = await file.arrayBuffer();
+  onProgress?.({ percent: 10, stage: 'A abrir o livro Excel' });
+  await yieldToInterface();
+  const workbook = XLSX.read(fileBuffer, { type: 'array', dense: true, cellDates: true });
+  onProgress?.({ percent: 28, stage: 'Estrutura do ficheiro identificada' });
+  await yieldToInterface();
   const realTime = workbook.Sheets['REAL TIME'];
   if (!realTime) throw new Error('A folha "REAL TIME" não foi encontrada.');
   const rows = XLSX.utils.sheet_to_json<unknown[]>(realTime, { header: 1, raw: true, defval: null });
@@ -36,7 +46,13 @@ export async function analyzeWorkbook(file: File): Promise<AnalysisResult> {
       idtr: normalizeIdtr(info),
       status: 'unreconciled',
     });
+    if (index % 20000 === 0) {
+      onProgress?.({ percent: 30 + Math.round((index / rows.length) * 15), stage: 'A ler movimentos pendentes', processed: index, total: rows.length });
+      await yieldToInterface();
+    }
   }
+  onProgress?.({ percent: 46, stage: `${movements.length.toLocaleString('pt-AO')} movimentos pendentes lidos` });
+  await yieldToInterface();
   const reconciledMovements: Movement[] = [];
   const recSheet = workbook.Sheets.REC;
   if (recSheet) {
@@ -65,16 +81,24 @@ export async function analyzeWorkbook(file: File): Promise<AnalysisResult> {
         idtr,
         status,
       });
+      if (index % 20000 === 0) {
+        onProgress?.({ percent: 48 + Math.round((index / recRows.length) * 37), stage: 'A ler movimentos reconciliados', processed: index, total: recRows.length });
+        await yieldToInterface();
+      }
     }
   }
+  onProgress?.({ percent: 87, stage: 'A aplicar as regras de reconciliação' });
+  await yieldToInterface();
   const balanceSheet = workbook.Sheets.BL;
   const balanceRows = balanceSheet ? XLSX.utils.sheet_to_json<unknown[]>(balanceSheet, { header: 1, raw: true, defval: null }) : [];
   const accountingBalance = Number.isFinite(numeric(balanceRows[4]?.[5])) ? numeric(balanceRows[4]?.[5]) : null;
   const movementDates = movements.map((movement) => movement.reportDate).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
   const effectiveReportDate = movementDates.sort().at(-1) ?? reportDate;
   const realTimeResult = reconcile(movements, accountingBalance, effectiveReportDate);
+  onProgress?.({ percent: 95, stage: 'A preparar indicadores e dashboard' });
+  await yieldToInterface();
   const allMovements = [...reconciledMovements, ...realTimeResult.movements];
-  return {
+  const result = {
     ...realTimeResult,
     movements: allMovements,
     totals: {
@@ -86,4 +110,6 @@ export async function analyzeWorkbook(file: File): Promise<AnalysisResult> {
       amount: allMovements.reduce((sum, movement) => sum + Math.round(movement.amount * 100), 0) / 100,
     },
   };
+  onProgress?.({ percent: 100, stage: 'Análise concluída' });
+  return result;
 }

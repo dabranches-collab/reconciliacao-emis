@@ -29,11 +29,13 @@ Os extratos fornecem número de operação, valor com sinal, data contabilístic
 
 ## Evolução das pendências
 
-| Fotografia inicial | Pendentes | Ainda pendentes na fotografia seguinte | Deixaram de estar pendentes |
-|---|---:|---:|---:|
-| 14 julho | 61 291 | 2 103 | 59 188 |
-| 22 julho | 86 647 | 6 | 86 641 |
-| 28 julho | 40 133 | 3 | 40 130 |
+| Fotografia inicial | Pendentes | Reconciliados na fotografia seguinte | N/Ok | Ainda em REAL TIME | Não localizados |
+|---|---:|---:|---:|---:|---:|
+| 14 julho | 61 291 | 59 188 | 0 | 2 103 | 0 |
+| 22 julho | 86 647 | 86 544 | 97 | 6 | 0 |
+| 28 julho | 40 133 | 40 127 | 3 | 3 | 0 |
+
+A reprodução histórica usou a combinação IDTR normalizado + número de operação + valor em cêntimos. Todas as pendências foram localizadas na fotografia seguinte, sem lacunas.
 
 ## Chaves recomendadas
 
