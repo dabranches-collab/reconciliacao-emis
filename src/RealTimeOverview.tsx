@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { AlertTriangle, CalendarRange, CheckCircle2, ChevronDown, Clock3, Database, TrendingUp } from 'lucide-react';
-import { currentHistory, loadHistory } from './lib/history';
+import type { AnalysisResult } from './types';
 
 const date = (value:string) => new Intl.DateTimeFormat('pt-AO',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(`${value}T12:00:00`));
 const addDay = (value:string,days:number) => { const d=new Date(`${value}T12:00:00`);d.setDate(d.getDate()+days);return d.toISOString().slice(0,10); };
 const isBusinessDay = (value:string) => { const weekday=new Date(`${value}T12:00:00`).getDay(); return weekday!==0&&weekday!==6; };
 const daysBetween = (from:string,to:string) => { const days:string[]=[]; for(let day=from;day<=to;day=addDay(day,1)) if(isBusinessDay(day)) days.push(day); return days; };
 
-export default function RealTimeOverview({revision}:{revision:number}){
+type CentralResult = AnalysisResult & { lastUploadedAt?:string; uploadedBy?:string };
+export default function RealTimeOverview({revision,result}:{revision:number;result:CentralResult|null}){
   const [showGaps,setShowGaps]=useState(false);
-  void revision; const history=currentHistory(loadHistory()); const lastUpload=history.at(-1);
+  void revision;
   const dailyMap=new Map<string,{movements:number;automatic:number;unreconciled:number;missingIdtr:number;amount:number}>();
-  for(const snapshot of history) for(const [day,value] of Object.entries(snapshot.dailyMetrics??{})) dailyMap.set(day,value);
+  for(const [day,value] of Object.entries(result?.dailyMetrics??{})) dailyMap.set(day,value);
   const dailyDates=[...dailyMap.keys()].sort(),firstDay=dailyDates[0],lastDay=dailyDates.at(-1);
   const gaps:{from:string;to:string}[]=[]; for(let i=1;i<dailyDates.length;i++){const from=addDay(dailyDates[i-1],1),to=addDay(dailyDates[i],-1),missing=daysBetween(from,to);if(missing.length)gaps.push({from:missing[0],to:missing.at(-1)!});}
   const daily=[...dailyMap.values()];
@@ -25,6 +26,6 @@ export default function RealTimeOverview({revision}:{revision:number}){
     <article><Clock3/><span>Maior volume diário</span><strong>{maxDaily===null?'—':maxDaily.toLocaleString('pt-AO')}</strong><small>{maxDaily===null?'reimporte os extratos':'movimentos num dia'}</small></article>
     <article><CalendarRange/><span>Primeiro dia na base</span><strong>{firstDay?date(firstDay):'—'}</strong><small>{firstDay?'primeiro MRDATL consolidado':'sem dados diários'}</small></article>
     <article><CalendarRange/><span>Último dia na base</span><strong>{lastDay?date(lastDay):'—'}</strong><small>{lastDay?`${dailyDates.length} dias disponíveis`:'sem dados diários'}</small></article>
-    <article><Clock3/><span>Último carregamento</span><strong>{lastUpload?new Intl.DateTimeFormat('pt-AO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(lastUpload.lastUploadedAt)):'—'}</strong><small>{lastUpload?.uploadedBy??'sem dados'}</small></article>
+    <article><Clock3/><span>Último carregamento</span><strong>{result?.lastUploadedAt?new Intl.DateTimeFormat('pt-AO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(result.lastUploadedAt)):'—'}</strong><small>{result?.uploadedBy??'sem dados centrais'}</small></article>
   </div></section>;
 }
