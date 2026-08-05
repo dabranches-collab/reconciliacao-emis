@@ -1,12 +1,12 @@
 import type { AnalysisResult } from '../types';
 
 export interface HistorySnapshot {
-  id: string; reportDate: string; filename: string; fileHash: string; version: number;
+  id: string; periodStart: string; reportDate: string; filename: string; fileHash: string; version: number;
   current: boolean; uploadCount: number; firstUploadedAt: string; lastUploadedAt: string; uploadedBy: string;
   totals: AnalysisResult['totals']; movementTypes: NonNullable<AnalysisResult['movementTypes']>;
 }
 
-const KEY = 'emis-reconciliation-history-v1';
+const KEY = 'reconciliation-realtime-raw-history-v2';
 export const loadHistory = (): HistorySnapshot[] => {
   try { return JSON.parse(localStorage.getItem(KEY) ?? '[]') as HistorySnapshot[]; } catch { return []; }
 };
@@ -20,7 +20,7 @@ export const saveHistorySnapshot = (result: AnalysisResult, uploadedBy: string):
   if (repeated) {
     repeated.current = true; repeated.uploadCount++; repeated.lastUploadedAt = now; repeated.uploadedBy = uploadedBy;
   } else {
-    history.push({ id: crypto.randomUUID(), reportDate: result.reportDate, filename: result.sourceFilename ?? 'ficheiro.xlsx', fileHash: hash,
+    history.push({ id: crypto.randomUUID(), periodStart: result.periodStart ?? result.reportDate, reportDate: result.reportDate, filename: result.sourceFilename ?? 'ficheiro.xlsx', fileHash: hash,
       version: Math.max(0, ...sameDate.map((item) => item.version)) + 1, current: true, uploadCount: 1,
       firstUploadedAt: now, lastUploadedAt: now, uploadedBy, totals: result.totals, movementTypes: result.movementTypes ?? {} });
   }

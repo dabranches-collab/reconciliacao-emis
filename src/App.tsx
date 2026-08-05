@@ -6,6 +6,7 @@ import { useAuth } from './AuthGate';
 import { classifyMovement } from './lib/movementType';
 import { saveHistorySnapshot } from './lib/history';
 import HistoryDashboard from './HistoryDashboard';
+import RealTimeOverview from './RealTimeOverview';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
 
@@ -25,10 +26,6 @@ const movementTypes = [
 function Results({ result }: { result: AnalysisResult }) {
   const [filter, setFilter] = useState('all');
   const rows = useMemo(() => result.movements.filter((m) => filter === 'all' || m.status === filter).slice(0, 250), [result, filter]);
-  const missingBySheet = useMemo(() => result.movements.reduce((counts, movement) => {
-    if (movement.status === 'missing_idtr') movement.id.includes(':REC:') ? counts.rec++ : counts.realTime++;
-    return counts;
-  }, { realTime: 0, rec: 0 }), [result]);
   const typeSummaries = useMemo(() => {
     const counts = new Map(movementTypes.map((type) => [type.key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
     if (result.movementTypes) for (const [key, value] of Object.entries(result.movementTypes)) Object.assign(counts.get(key as typeof movementTypes[number]['key'])!, value);
@@ -44,22 +41,26 @@ function Results({ result }: { result: AnalysisResult }) {
       return { ...type, ...count, rate: count.total ? Math.round((count.reconciled / count.total) * 100) : 0 };
     });
   }, [result]);
-  const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado no ficheiro', manual: 'Reconciliado manualmente na plataforma', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
+  const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado automaticamente por IDTR', manual: 'Reconciliado manualmente na plataforma', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
   const balances = result.balanceBreakdown ?? { realTime: result.totals.amount, rec: 0, difference: result.accountingBalance === null ? null : result.totals.amount - result.accountingBalance };
   return <>
     <section className="metrics">
       <Metric label="Total movimentos" value={result.totals.movements.toLocaleString('pt-AO')} />
-      <Metric label="Reconciliados no ficheiro" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
+      <Metric label="Reconciliados automaticamente por IDTR" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
       <Metric label="Reconciliados manualmente na plataforma" value={result.totals.manual.toLocaleString('pt-AO')} tone="manual" />
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
-      <Metric label={`Sem IDTR (${missingBySheet.realTime} REAL TIME + ${missingBySheet.rec} REC)`} value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
+      <Metric label="Movimentos sem IDTR" value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
-    <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">CONTROLO DE MONTANTES</p><h2>Comparação dos saldos</h2></div><p>O saldo contabilístico deve coincidir com REAL TIME; os movimentos em REC devem fechar a zero.</p></div><div className="balance-widgets">
+    {result.rawAmounts ? <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">MONTANTES DO EXTRATO</p><h2>Débitos, créditos e saldo acumulado</h2></div><p>Valores calculados pela coluna monetária com sinal e pelo saldo <code>MRSALD</code>.</p></div><div className="balance-widgets">
+      <article><span>Total de débitos</span><strong>{money.format(result.rawAmounts.debits)}</strong><small>Movimentos com sinal negativo</small></article><article><span>Total de créditos</span><strong>{money.format(result.rawAmounts.credits)}</strong><small>Movimentos com sinal positivo</small></article><article><span>Movimento líquido</span><strong>{money.format(result.rawAmounts.net)}</strong><small>Créditos menos débitos</small></article><article><span>Saldo final MRSALD</span><strong>{result.rawAmounts.closingBalance===null?'—':money.format(result.rawAmounts.closingBalance)}</strong><small>Saldo acumulado no fim do extrato</small></article>
+    </div></section> : <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">CONTROLO DE MONTANTES</p><h2>Comparação dos saldos</h2></div></div><div className="balance-widgets">
       <article><span>Saldo REAL TIME</span><strong>{money.format(balances.realTime)}</strong><small>Movimentos ainda em aberto</small></article>
       <article className={Math.abs(balances.rec) < .005 ? 'matched' : 'mismatch'}><span>Saldo REC</span><strong>{money.format(balances.rec)}</strong><small>{Math.abs(balances.rec) < .005 ? 'Fecha corretamente a zero' : 'Deveria fechar a zero'}</small></article>
       <article><span>Saldo contabilístico BL</span><strong>{result.accountingBalance === null ? 'Não encontrado' : money.format(result.accountingBalance)}</strong><small>Valor de controlo no ficheiro</small></article>
       <article className={balances.difference !== null && Math.abs(balances.difference) < .005 ? 'matched' : 'mismatch'}><span>Diferença REAL TIME − BL</span><strong>{balances.difference === null ? '—' : money.format(balances.difference)}</strong><small>{balances.difference === null ? 'Sem saldo contabilístico' : Math.abs(balances.difference) < .005 ? 'Saldos coincidentes' : 'Diferença a investigar'}</small></article>
-    </div></section>
+    </div></section>}
+    {result.ageBuckets && <section className="aging-section"><div className="section-heading"><div><p className="eyebrow">ENVELHECIMENTO</p><h2>Idade dos movimentos na data de corte</h2></div><p>Idade operacional por <code>MRDTSIS</code>; corte contabilístico por <code>MRDATL</code>.</p></div><div className="aging-grid">{['D+0','D+1','D+2','D+3','D+4–7','D+8+'].map(key=>{const item=result.ageBuckets?.[key]??{total:0,automatic:0,unreconciled:0,amount:0};const rate=item.total?item.automatic/item.total*100:0;return <article key={key}><span>{key}</span><strong>{item.unreconciled.toLocaleString('pt-AO')}</strong><small>pendentes de {item.total.toLocaleString('pt-AO')}</small><div><i style={{width:`${rate}%`}}/></div><b>{rate.toFixed(1)}% reconciliados</b></article>})}</div></section>}
+    {result.reconciliationTiming && <section className="timing-section"><div className="section-heading"><div><p className="eyebrow">TEMPO DE RECONCILIAÇÃO</p><h2>Quanto demoraram os grupos IDTR a fechar</h2></div><p>Dias entre o primeiro e o último movimento de cada grupo que fecha a zero.</p></div><div className="timing-widgets"><article className="average"><span>Média</span><strong>{result.reconciliationTiming.averageDays.toFixed(2)}</strong><small>dias por grupo</small></article>{['D+0','D+1','D+2','D+3','D+4+'].map(key=>{const count=result.reconciliationTiming?.buckets[key]??0,rate=result.reconciliationTiming?.totalGroups?count/result.reconciliationTiming.totalGroups*100:0;return <article key={key}><span>{key==='D+0'?'No próprio dia':key==='D+4+'?'Mais de 3 dias':key.replace('+','+ ' )+'dia(s)'}</span><strong>{rate.toFixed(1)}%</strong><small>{count.toLocaleString('pt-AO')} grupos</small></article>})}</div></section>}
     <section className="movement-dashboard">
       <div className="section-heading"><div><p className="eyebrow">VISÃO POR NATUREZA</p><h2>Resultados por tipo de movimento</h2></div><p>Distribuição dos estados depois da aplicação automática das regras de reconciliação.</p></div>
       <div className="movement-grid">{typeSummaries.map((type) => {
@@ -78,7 +79,7 @@ function Results({ result }: { result: AnalysisResult }) {
     </section>
     <section className="panel">
       <div className="panel-head"><div><h2>Detalhe dos movimentos analisados</h2><p>Reporte de {result.reportDate || 'data não identificada'}</p></div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados no ficheiro</option><option value="manual">Reconciliados manualmente na plataforma</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados automaticamente por IDTR</option><option value="manual">Reconciliados manualmente na plataforma</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
       </div>
       <div className="table-wrap"><table><thead><tr><th>Linha</th><th>Data</th><th>IDTR</th><th>Descrição</th><th>Valor</th><th>Estado</th></tr></thead><tbody>{rows.map((m) => <tr key={m.id}><td>{m.row}</td><td>{m.reportDate}</td><td className="mono">{m.idtr ?? '—'}</td><td>{m.description}</td><td className="amount">{money.format(m.amount)}</td><td><span className={`badge ${m.status}`}>{statusLabel(m)}</span></td></tr>)}</tbody></table></div>
       {rows.length === 250 && <p className="table-note">A mostrar os primeiros 250 movimentos do filtro selecionado.</p>}
@@ -99,7 +100,7 @@ function ProcessingDashboard({ fileName, progress }: { fileName: string; progres
   const step = progress.percent < 10 ? 1 : progress.percent < 38 ? 2 : progress.percent < 67 ? 3 : progress.percent < 98 ? 4 : 5;
   const liveMetrics = [
     ['Total movimentos', progress.liveTotals?.movements],
-    ['Reconciliados no ficheiro', progress.liveTotals?.automatic],
+    ['Reconciliados por IDTR', progress.liveTotals?.automatic],
     ['Não reconciliados', progress.liveTotals?.unreconciled],
     ['Sem IDTR', progress.liveTotals?.missingIdtr],
   ] as const;
@@ -156,7 +157,7 @@ export default function App() {
     finally { setBusy(false); }
   };
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
-  const pageDescription = view === 'import' ? 'Arraste o ficheiro diário e receba os resultados automaticamente.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'guide' ? 'Compreenda o ciclo, as regras e o impacto da data escolhida.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
+  const pageDescription = view === 'import' ? 'Importe diretamente o extrato Real Time, sem ficheiros intermédios.' : view === 'results' ? 'Consulte os resultados e exceções identificadas.' : view === 'guide' ? 'Compreenda o ciclo, as regras e o impacto da data escolhida.' : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   if (tool === 'portal') return <div className="tool-portal"><header><div className="portal-brand"><div className="brand-mark">R</div><div><strong>Portal de Reconciliação</strong><span>Ferramentas operacionais</span></div></div><div className="portal-user"><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.email}</span></div></div></header><main><div className="portal-heading"><p className="eyebrow">SELECIONE UMA FERRAMENTA</p><h1>Reconciliações financeiras</h1><p>Cada ferramenta mantém as suas próprias regras, importações, resultados e histórico.</p></div><div className="tool-grid"><article className="tool-card realtime"><div className="tool-card-icon"><Activity size={30}/></div><span className="tool-status available">Disponível</span><h2>Reconciliação Real Time</h2><p>Importação direta dos extratos Real Time, reconciliação automática por IDTR e tratamento auditável das exceções.</p><ul><li>Extratos Real Time</li><li>Reconciliação automática e manual</li><li>Histórico e deteção de anomalias</li></ul><button className="primary-button" onClick={() => setTool('realtime')}>Abrir ferramenta</button></article><article className="tool-card stc"><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><span className="tool-status preparing">Em preparação</span><h2>Reconciliação STC</h2><h3>Sistema de Transferências a Crédito</h3><p>Ferramenta dedicada ao tratamento e reconciliação das operações do STC, com regras e histórico independentes.</p><ul><li>Importações próprias do STC</li><li>Regras específicas de transferências</li><li>Auditoria separada</li></ul><button className="secondary-button" onClick={() => setTool('stc')}>Ver ferramenta</button></article></div></main></div>;
   if (tool === 'stc') return <div className="tool-placeholder"><div><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><p className="eyebrow">NOVA FERRAMENTA</p><h1>Reconciliação STC</h1><h2>Sistema de Transferências a Crédito</h2><p>A estrutura está reservada e será desenvolvida com regras, importações e histórico próprios.</p><button className="primary-button" onClick={() => setTool('portal')}>Voltar às ferramentas</button></div></div>;
   return <div className="app-shell">
@@ -165,9 +166,9 @@ export default function App() {
       <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
     </aside>
     <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
-      {view === 'import' && <section className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
-        <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o ficheiro…' : 'Arraste o ficheiro Excel para aqui'}</h2><p>A plataforma identifica automaticamente a data, movimentos, IDTR e saldo contabilístico.</p><label className="primary-button">Selecionar ficheiro<input type="file" accept=".xlsx,.xls,.xlsm" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formatos aceites: XLSX, XLS e XLSM</small>{error && <div className="error">{error}</div>}
-      </section>}
+      {view === 'import' && <><RealTimeOverview revision={historyRevision}/><section className={`dropzone compact-dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
+        <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o extrato…' : 'Arraste o extrato Real Time para aqui'}</h2><p>A plataforma lê diretamente as colunas MR, extrai o IDTR e reconcilia sem ficheiros intermédios.</p><label className="primary-button">Selecionar extrato<input type="file" accept=".xlsx" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formato aceite: extrato Real Time em XLSX</small>{error && <div className="error">{error}</div>}
+      </section></>}
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
       {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
       {view === 'guide' && <Guide/>}
