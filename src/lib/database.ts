@@ -3,6 +3,7 @@ import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase';
 
 export type PersistenceContext={url:string;key:string;accessToken:string;analysisId:string;batchId:string};
 export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;duplicateCount:number;errorCount:number};
+export type AuditLog={id:number;actor:string;email:string;action:string;entityType:string;details:Record<string,unknown>;createdAt:string};
 
 export async function preparePersistentImport(file:File,fileHash:string):Promise<{context:PersistenceContext;duplicate:boolean}>{
   const {data:{session}}=await supabase.auth.getSession();
@@ -71,3 +72,9 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
+
+export async function loadAuditLogs(limit=1000):Promise<AuditLog[]>{
+  const query=await supabase.from('audit_logs').select('id,action,entity_type,details,created_at,profiles!audit_logs_actor_id_fkey(full_name,email)').order('created_at',{ascending:false}).limit(limit);
+  if(query.error)throw query.error;
+  return(query.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:Number(row.id),actor:profile?.full_name||profile?.email||'Utilizador',email:profile?.email||'',action:row.action,entityType:row.entity_type,details:(row.details??{}) as Record<string,unknown>,createdAt:row.created_at};});
+}

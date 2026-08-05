@@ -1,0 +1,8 @@
+.app-shell{grid-template-columns:250px minmax(0,1fr)}
+.app-shell>main{width:100%;max-width:none;min-width:0}
+.audit-filters{display:grid;grid-template-columns:minmax(170px,1.2fr) minmax(170px,1fr) minmax(145px,.8fr) minmax(145px,.8fr) auto;gap:10px;align-items:end;padding:16px 22px;background:#f6f9f8;border-bottom:1px solid #e2e9e7}
+.audit-filters label{display:grid;gap:5px;color:#65716e;font-size:10px;font-weight:800}
+.audit-filters input,.audit-filters select{width:100%;padding:9px 10px;border:1px solid #d5dfdc;border-radius:8px;background:#fff;color:#263b36}
+.audit-filters button{padding:10px 13px;border:0;border-radius:8px;background:#eeeafc;color:#3718b4;font-size:10px;font-weight:800;cursor:pointer}
+.audit-log-panel td small{display:block;margin-top:3px;color:#71807c}
+@media(max-width:1250px){.audit-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.audit-filters button{align-self:stretch}}

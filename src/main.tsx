@@ -5,4 +5,5 @@ import AuthGate from './AuthGate';
 import './styles.css';
 import './auth.css';
 import './keve-theme.css';
+import './layout-fixes.css';
 createRoot(document.getElementById('root')!).render(<StrictMode><AuthGate><App /></AuthGate></StrictMode>);
