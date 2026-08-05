@@ -155,7 +155,6 @@ function Guide() {
       <article className="timing-best"><span><CheckCircle2 size={15}/> 2–3 dias</span><h3>Janela recomendada</h3><p>Equilibra a maturação automática dos movimentos com a rapidez da análise.</p><ul><li>Maior taxa de reconciliação</li><li>Menos trabalho manual desnecessário</li><li>Exceções ainda tratadas atempadamente</li></ul></article>
       <article className="timing-late"><span>4+ dias</span><h3>Análise tardia</h3><p>Pode reduzir pendências transitórias, mas atrasa a deteção de problemas reais.</p><ul><li>Informação operacional envelhecida</li><li>Resposta mais lenta a diferenças</li><li>Maior risco de acumulação</li></ul></article>
     </div></section>
-    <section className="guide-rule"><ShieldCheck size={24}/><div><strong>Regra de auditoria</strong><p><code>Ok</code> e <code>OK</code> significam apenas reconciliado no ficheiro. Uma reconciliação manual só é identificável quando for feita na plataforma, com utilizador, data e motivo.</p></div></section>
   </div>;
 }
 
