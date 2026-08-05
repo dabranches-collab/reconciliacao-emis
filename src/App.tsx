@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, FileSpreadsheet, History, Landmark, ReceiptText, Search, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
+import { Activity, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, History, Landmark, ReceiptText, Search, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
 import type { AnalysisResult, Movement } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
 import { classifyMovement } from './lib/movementType';
+import { saveHistorySnapshot } from './lib/history';
+import HistoryDashboard from './HistoryDashboard';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
 
@@ -143,10 +145,11 @@ export default function App() {
   const [processingFile, setProcessingFile] = useState('');
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const process = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
-    try { setResult(await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })))); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
+    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes }))); setResult(analyzed); saveHistorySnapshot(analyzed, identity.email); setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
     finally { setBusy(false); }
   };
   const pageTitle = view === 'import' ? 'Nova reconciliação' : view === 'results' ? 'Resultados da reconciliação' : view === 'guide' ? 'Como funciona' : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
@@ -163,7 +166,7 @@ export default function App() {
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
       {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
       {view === 'guide' && <Guide/>}
-      {view === 'history' && <section className="panel empty-state"><FileSpreadsheet size={28}/><h2>Ainda não existem análises guardadas</h2><p>Os carregamentos persistidos aparecerão aqui por data e lote.</p><button className="primary-button" onClick={() => setView('import')}>Importar primeiro ficheiro</button></section>}
+      {view === 'history' && <HistoryDashboard revision={historyRevision}/>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
       {view === 'audit' && identity.isAdmin && <section className="panel empty-state"><Activity size={28}/><h2>Log de utilização</h2><p>As ações da plataforma serão apresentadas aqui com filtros e exportação.</p></section>}
     </main>

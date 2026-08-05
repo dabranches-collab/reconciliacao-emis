@@ -30,4 +30,6 @@ export interface AnalysisResult {
   groups: ReconciliationGroup[];
   totals: { movements: number; automatic: number; manual: number; unreconciled: number; missingIdtr: number; amount: number };
   movementTypes?: Record<string, { total: number; reconciled: number; unreconciled: number; missingIdtr: number }>;
+  sourceFileHash?: string;
+  sourceFilename?: string;
 }
