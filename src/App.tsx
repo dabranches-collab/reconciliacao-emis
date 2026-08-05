@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, FileSpreadsheet, History, Search, ShieldCheck, Upload, Users } from 'lucide-react';
+import { Activity, ArrowLeftRight, CircleEllipsis, CreditCard, FileSpreadsheet, History, Landmark, ReceiptText, Search, ShieldCheck, Upload, Users, Wrench } from 'lucide-react';
 import type { AnalysisResult, Movement } from './types';
 import { analyzeWorkbook } from './lib/excel';
 import { useAuth } from './AuthGate';
@@ -10,9 +10,42 @@ function Metric({ label, value, tone = 'neutral' }: { label: string; value: stri
   return <article className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>;
 }
 
+const movementTypes = [
+  { key: 'pos', label: 'Movimentos POS', hint: 'Compras e operações em terminais', icon: CreditCard, color: 'emerald' },
+  { key: 'atm', label: 'Movimentos ATM', hint: 'Levantamentos e operações em caixas', icon: Landmark, color: 'blue' },
+  { key: 'transfer', label: 'Transferências', hint: 'Transferências, NIB e canais digitais', icon: ArrowLeftRight, color: 'violet' },
+  { key: 'commission', label: 'Comissões', hint: 'Comissões e encargos associados', icon: ReceiptText, color: 'orange' },
+  { key: 'service', label: 'Serviços', hint: 'Pagamentos e serviços especiais', icon: Wrench, color: 'rose' },
+  { key: 'other', label: 'Outros movimentos', hint: 'Restantes naturezas identificadas', icon: CircleEllipsis, color: 'slate' },
+] as const;
+
+function movementType(description: string): typeof movementTypes[number]['key'] {
+  const text = description.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (text.includes('COMISS')) return 'commission';
+  if (text.includes('ATM')) return 'atm';
+  if (text.includes('POS')) return 'pos';
+  if (text.includes('TRANSF') || text.includes('TRF') || text.includes('/NIB') || text.includes('HBMB')) return 'transfer';
+  if (text.includes('SERVIC') || text.includes('PAGAMENTO')) return 'service';
+  return 'other';
+}
+
 function Results({ result }: { result: AnalysisResult }) {
   const [filter, setFilter] = useState('all');
   const rows = useMemo(() => result.movements.filter((m) => filter === 'all' || m.status === filter).slice(0, 250), [result, filter]);
+  const typeSummaries = useMemo(() => {
+    const counts = new Map(movementTypes.map((type) => [type.key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
+    for (const movement of result.movements) {
+      const count = counts.get(movementType(movement.description))!;
+      count.total += 1;
+      if (movement.status === 'automatic' || movement.status === 'manual') count.reconciled += 1;
+      else if (movement.status === 'unreconciled') count.unreconciled += 1;
+      else if (movement.status === 'missing_idtr') count.missingIdtr += 1;
+    }
+    return movementTypes.map((type) => {
+      const count = counts.get(type.key)!;
+      return { ...type, ...count, rate: count.total ? Math.round((count.reconciled / count.total) * 100) : 0 };
+    });
+  }, [result]);
   const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado automaticamente', manual: 'Reconciliado manualmente', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
   return <>
     <section className="metrics">
@@ -27,8 +60,24 @@ function Results({ result }: { result: AnalysisResult }) {
       <div><span>Saldo contabilístico</span><strong>{result.accountingBalance === null ? 'Não encontrado' : money.format(result.accountingBalance)}</strong></div>
       <div><span>Diferença</span><strong>{result.accountingBalance === null ? '—' : money.format(result.totals.amount - result.accountingBalance)}</strong></div>
     </section>
+    <section className="movement-dashboard">
+      <div className="section-heading"><div><p className="eyebrow">VISÃO POR NATUREZA</p><h2>Resultados por tipo de movimento</h2></div><p>Distribuição dos estados depois da aplicação automática das regras de reconciliação.</p></div>
+      <div className="movement-grid">{typeSummaries.map((type) => {
+        const Icon = type.icon;
+        return <article className={`movement-card ${type.color}`} key={type.key}>
+          <div className="movement-card-head"><div className="movement-icon"><Icon size={23}/></div><div><h3>{type.label}</h3><p>{type.hint}</p></div><strong>{type.total.toLocaleString('pt-AO')}</strong></div>
+          <div className="progress-track"><span style={{ width: `${type.rate}%` }}/></div>
+          <div className="movement-rate"><span>Taxa reconciliada</span><strong>{type.rate}%</strong></div>
+          <div className="movement-states">
+            <div className="state-good"><span>Reconciliados</span><strong>{type.reconciled.toLocaleString('pt-AO')}</strong></div>
+            <div className="state-warn"><span>Não reconciliados</span><strong>{type.unreconciled.toLocaleString('pt-AO')}</strong></div>
+            <div className="state-bad"><span>Sem IDTR</span><strong>{type.missingIdtr.toLocaleString('pt-AO')}</strong></div>
+          </div>
+        </article>;
+      })}</div>
+    </section>
     <section className="panel">
-      <div className="panel-head"><div><h2>Movimentos analisados</h2><p>Reporte de {result.reportDate || 'data não identificada'}</p></div>
+      <div className="panel-head"><div><h2>Detalhe dos movimentos analisados</h2><p>Reporte de {result.reportDate || 'data não identificada'}</p></div>
         <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados automaticamente</option><option value="manual">Reconciliados manualmente</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
       </div>
       <div className="table-wrap"><table><thead><tr><th>Linha</th><th>Data</th><th>IDTR</th><th>Descrição</th><th>Valor</th><th>Estado</th></tr></thead><tbody>{rows.map((m) => <tr key={m.id}><td>{m.row}</td><td>{m.reportDate}</td><td className="mono">{m.idtr ?? '—'}</td><td>{m.description}</td><td className="amount">{money.format(m.amount)}</td><td><span className={`badge ${m.status}`}>{statusLabel(m)}</span></td></tr>)}</tbody></table></div>
@@ -54,7 +103,7 @@ export default function App() {
   const pageDescription = view === 'import' ? (result ? 'Consulte os resultados e exceções identificadas.' : 'Arraste o ficheiro diário e receba os resultados automaticamente.') : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   return <div className="app-shell">
     <aside><div className="brand"><div className="brand-mark">R</div><div><strong>Reconciliação</strong><span>EMIS Real Time</span></div></div>
-      <nav><button className={view === 'import' ? 'active' : ''} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}</nav>
+      <nav><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
       <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
     </aside>
     <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
