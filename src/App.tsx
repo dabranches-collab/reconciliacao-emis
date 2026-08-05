@@ -86,12 +86,18 @@ function ProcessingDashboard({ fileName, progress }: { fileName: string; progres
   const [seconds, setSeconds] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer); }, []);
   const step = progress.percent < 10 ? 1 : progress.percent < 38 ? 2 : progress.percent < 67 ? 3 : progress.percent < 98 ? 4 : 5;
+  const liveMetrics = [
+    ['Total movimentos', progress.liveTotals?.movements],
+    ['Reconciliados no ficheiro', progress.liveTotals?.automatic],
+    ['Não reconciliados', progress.liveTotals?.unreconciled],
+    ['Sem IDTR', progress.liveTotals?.missingIdtr],
+  ] as const;
   return <section className="processing-dashboard" aria-live="polite">
     <div className="processing-hero"><div className="processing-spinner" aria-hidden="true"><i/><i/><i/></div><div><p className="eyebrow">ANÁLISE EM CURSO · MOTOR ATIVO</p><h2>Estamos a processar a reconciliação</h2><p>{fileName}</p></div><div className="processing-percent"><strong>{progress.percent}%</strong><span>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span></div></div>
     <div className="processing-track"><span style={{ width: `${progress.percent}%` }}><i/></span></div>
     <div className="processing-status"><span className="processing-pulse"/><strong>{progress.stage}</strong><span className="line-counter">{progress.total ? <><b>{(progress.processed ?? 0).toLocaleString('pt-AO')}</b> de <b>{progress.total.toLocaleString('pt-AO')}</b> linhas</> : <>A identificar o número de linhas<span className="counting-dots">…</span></>}</span></div>
     <div className="processing-steps">{['Receção', 'Classificados', 'Agrupamento IDTR', 'Validação', 'Dashboard'].map((label, index) => <div className={index + 1 < step ? 'done' : index + 1 === step ? 'active' : ''} key={label}><i>{index + 1 < step ? '✓' : index + 1}</i><span>{label}</span></div>)}</div>
-    <div className="processing-metrics">{['Total movimentos', 'Reconciliados no ficheiro', 'Não reconciliados', 'Sem IDTR'].map((label) => <article key={label}><span>{label}</span><i/></article>)}</div>
+    <div className="processing-metrics">{liveMetrics.map(([label, count]) => <article className={count !== undefined ? 'counting' : ''} key={label}><span>{label}</span>{count === undefined ? <i/> : <strong>{count.toLocaleString('pt-AO')}</strong>}</article>)}</div>
     <div className="processing-preview"><div><h3>Resultados por tipo de movimento</h3><p>Os cartões serão preenchidos assim que cada fase terminar.</p></div><div className="processing-card-grid">{['POS', 'ATM', 'Transferências'].map((label) => <article key={label}><strong>{label}</strong><i/><i/></article>)}</div></div>
   </section>;
 }

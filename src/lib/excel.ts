@@ -1,6 +1,6 @@
 import type { AnalysisResult } from '../types';
 
-export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number }
+export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number; liveTotals?: { movements: number; automatic: number; unreconciled: number; missingIdtr: number } }
 
 type WorkerMessage =
   | { type: 'progress'; progress: AnalysisProgress }
