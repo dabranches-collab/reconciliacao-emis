@@ -75,6 +75,7 @@ export async function analyzeWorkbookBuffer(fileName: string, buffer: ArrayBuffe
       }
     }
   }
+  const recAmountCents = totals.amountCents;
   rec = undefined;
 
   onProgress({ percent: 38, stage: 'A abrir os movimentos pendentes' });
@@ -117,6 +118,11 @@ export async function analyzeWorkbookBuffer(fileName: string, buffer: ArrayBuffe
     reportDate: effectiveReportDate, accountingBalance, movements: samples, groups: [],
     totals: { movements: totals.movements, automatic: totals.automatic, manual: 0, unreconciled: totals.unreconciled, missingIdtr: totals.missingIdtr, amount: totals.amountCents / 100 },
     movementTypes,
+    balanceBreakdown: {
+      rec: recAmountCents / 100,
+      realTime: (totals.amountCents - recAmountCents) / 100,
+      difference: accountingBalance === null ? null : (totals.amountCents - recAmountCents) / 100 - accountingBalance,
+    },
   };
   onProgress({ percent: 100, stage: 'Análise concluída' });
   return result;

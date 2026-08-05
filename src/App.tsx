@@ -45,6 +45,7 @@ function Results({ result }: { result: AnalysisResult }) {
     });
   }, [result]);
   const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado no ficheiro', manual: 'Reconciliado manualmente na plataforma', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
+  const balances = result.balanceBreakdown ?? { realTime: result.totals.amount, rec: 0, difference: result.accountingBalance === null ? null : result.totals.amount - result.accountingBalance };
   return <>
     <section className="metrics">
       <Metric label="Total movimentos" value={result.totals.movements.toLocaleString('pt-AO')} />
@@ -53,11 +54,12 @@ function Results({ result }: { result: AnalysisResult }) {
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
       <Metric label={`Sem IDTR (${missingBySheet.realTime} REAL TIME + ${missingBySheet.rec} REC)`} value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
-    <section className="balance-card">
-      <div><span>Saldo dos movimentos</span><strong>{money.format(result.totals.amount)}</strong></div>
-      <div><span>Saldo contabilístico</span><strong>{result.accountingBalance === null ? 'Não encontrado' : money.format(result.accountingBalance)}</strong></div>
-      <div><span>Diferença</span><strong>{result.accountingBalance === null ? '—' : money.format(result.totals.amount - result.accountingBalance)}</strong></div>
-    </section>
+    <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">CONTROLO DE MONTANTES</p><h2>Comparação dos saldos</h2></div><p>O saldo contabilístico deve coincidir com REAL TIME; os movimentos em REC devem fechar a zero.</p></div><div className="balance-widgets">
+      <article><span>Saldo REAL TIME</span><strong>{money.format(balances.realTime)}</strong><small>Movimentos ainda em aberto</small></article>
+      <article className={Math.abs(balances.rec) < .005 ? 'matched' : 'mismatch'}><span>Saldo REC</span><strong>{money.format(balances.rec)}</strong><small>{Math.abs(balances.rec) < .005 ? 'Fecha corretamente a zero' : 'Deveria fechar a zero'}</small></article>
+      <article><span>Saldo contabilístico BL</span><strong>{result.accountingBalance === null ? 'Não encontrado' : money.format(result.accountingBalance)}</strong><small>Valor de controlo no ficheiro</small></article>
+      <article className={balances.difference !== null && Math.abs(balances.difference) < .005 ? 'matched' : 'mismatch'}><span>Diferença REAL TIME − BL</span><strong>{balances.difference === null ? '—' : money.format(balances.difference)}</strong><small>{balances.difference === null ? 'Sem saldo contabilístico' : Math.abs(balances.difference) < .005 ? 'Saldos coincidentes' : 'Diferença a investigar'}</small></article>
+    </div></section>
     <section className="movement-dashboard">
       <div className="section-heading"><div><p className="eyebrow">VISÃO POR NATUREZA</p><h2>Resultados por tipo de movimento</h2></div><p>Distribuição dos estados depois da aplicação automática das regras de reconciliação.</p></div>
       <div className="movement-grid">{typeSummaries.map((type) => {

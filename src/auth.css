@@ -10,6 +10,7 @@
 .empty-state h2 { color: #183b34; margin: 16px 0 7px; }
 .empty-state p { max-width: 520px; margin-bottom: 22px; }
 .metrics { grid-template-columns: repeat(5, 1fr); }
+.balance-section{margin:22px 0}.balance-widgets{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.balance-widgets article{padding:19px;background:#173b34;color:white;border-radius:13px;border-top:4px solid #66827b}.balance-widgets span{display:block;color:#bdd0cb;font-size:11px}.balance-widgets strong{display:block;margin:8px 0 5px;font-size:19px}.balance-widgets small{color:#a9c6be;font-size:10px}.balance-widgets article.matched{border-top-color:#43d49f}.balance-widgets article.matched small{color:#69e0b3}.balance-widgets article.mismatch{border-top-color:#f0a63a}.balance-widgets article.mismatch small{color:#ffc66f}@media(max-width:1200px){.balance-widgets{grid-template-columns:repeat(2,1fr)}}
 .metric.manual { border-top: 3px solid #5874d8; }
 .badge.manual { background: #e8edff; color: #3d55aa; }
 .nav-import { margin-top: 14px; border-top: 1px solid #2b4a45; border-radius: 0 0 9px 9px; padding-top: 16px; }

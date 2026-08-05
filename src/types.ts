@@ -32,4 +32,5 @@ export interface AnalysisResult {
   movementTypes?: Record<string, { total: number; reconciled: number; unreconciled: number; missingIdtr: number }>;
   sourceFileHash?: string;
   sourceFilename?: string;
+  balanceBreakdown?: { realTime: number; rec: number; difference: number | null };
 }
