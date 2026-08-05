@@ -41,7 +41,7 @@ export const reconcile = (movements: Movement[], accountingBalance: number | nul
       manual: movements.filter((m) => m.status === 'manual').length,
       unreconciled: movements.filter((m) => m.status === 'unreconciled').length,
       missingIdtr: movements.filter((m) => m.status === 'missing_idtr').length,
-      amount: movements.reduce((sum, m) => sum + m.amount, 0),
+      amount: movements.reduce((sum, m) => sum + Math.round(m.amount * 100), 0) / 100,
     },
   };
 };
