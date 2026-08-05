@@ -141,8 +141,17 @@ function Guide() {
 
 export default function App() {
   const identity = useAuth();
-  const [tool, setTool] = useState<'portal' | 'realtime' | 'stc'>('portal');
-  const [view, setView] = useState<'import' | 'results' | 'guide' | 'history' | 'users' | 'audit'>(() => currentHistory(loadHistory()).length ? 'results' : 'import');
+  type Tool = 'portal' | 'realtime' | 'stc';
+  type View = 'import' | 'results' | 'guide' | 'history' | 'users' | 'audit';
+  const [tool, setTool] = useState<Tool>(() => {
+    const saved = sessionStorage.getItem('reconciliation-active-tool');
+    return saved === 'realtime' || saved === 'stc' ? saved : 'portal';
+  });
+  const [view, setView] = useState<View>(() => {
+    const saved = sessionStorage.getItem('reconciliation-active-view');
+    return saved === 'import' || saved === 'results' || saved === 'guide' || saved === 'history' || saved === 'users' || saved === 'audit'
+      ? saved : currentHistory(loadHistory()).length ? 'results' : 'import';
+  });
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({ percent: 0, stage: 'A aguardar ficheiro' });
@@ -150,6 +159,8 @@ export default function App() {
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [historyRevision, setHistoryRevision] = useState(0);
+  useEffect(() => { sessionStorage.setItem('reconciliation-active-tool', tool); }, [tool]);
+  useEffect(() => { sessionStorage.setItem('reconciliation-active-view', view); }, [view]);
   const process = async (file?: File) => {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
