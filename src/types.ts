@@ -24,7 +24,7 @@ export interface ReconciliationGroup {
 }
 
 export interface AnalysisResult {
-  sourceMode?: 'raw_extract' | 'legacy_workbook';
+  sourceMode?: 'raw_extract';
   periodStart?: string;
   reportDate: string;
   accountingBalance: number | null;
@@ -34,7 +34,6 @@ export interface AnalysisResult {
   movementTypes?: Record<string, { total: number; reconciled: number; unreconciled: number; missingIdtr: number }>;
   sourceFileHash?: string;
   sourceFilename?: string;
-  balanceBreakdown?: { realTime: number; rec: number; difference: number | null };
   ageBuckets?: Record<string, { total: number; automatic: number; unreconciled: number; amount: number }>;
   rawAmounts?: { debits: number; credits: number; net: number; openingBalance: number | null; closingBalance: number | null };
   reconciliationTiming?: { averageDays: number; totalGroups: number; buckets: Record<string, number> };

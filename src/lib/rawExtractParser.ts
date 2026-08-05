@@ -1,7 +1,7 @@
 import type { AnalysisResult, Movement, ReconciliationStatus } from '../types';
 import { normalizeIdtr } from './reconciliation';
 import { classifyMovement, type MovementTypeKey } from './movementType';
-import type { AnalysisProgress } from './excelParser';
+import type { AnalysisProgress } from './excel';
 
 type ZipEntry = { name:string; method:number; compressedSize:number; offset:number };
 type TypeTotals = { total:number; reconciled:number; unreconciled:number; missingIdtr:number };

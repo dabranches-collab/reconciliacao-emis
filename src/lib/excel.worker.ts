@@ -1,4 +1,4 @@
-import type { AnalysisProgress } from './excelParser';
+import type { AnalysisProgress } from './excel';
 import { analyzeRawExtract } from './rawExtractParser';
 
 self.onmessage = async ({ data }: MessageEvent<{ name: string; buffer: ArrayBuffer }>) => {
