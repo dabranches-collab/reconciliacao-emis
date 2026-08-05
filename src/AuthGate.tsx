@@ -30,7 +30,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       setIdentity({ name, email, role, isAdmin: role === 'administrator' });
     };
     void client.auth.getSession().then(async ({ data }) => { await loadIdentity(data.session); setLoading(false); });
-    const { data } = client.auth.onAuthStateChange((event, nextSession) => { void loadIdentity(nextSession);if(event==='SIGNED_IN')void logPlatformAccess(); });
+    const { data } = client.auth.onAuthStateChange((_event, nextSession) => { void loadIdentity(nextSession); });
     return () => data.subscription.unsubscribe();
   }, []);
   if (!client) return <AuthContext.Provider value={demoIdentity}>{children}</AuthContext.Provider>;
@@ -39,7 +39,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setLoading(true);
     const { error: signInError } = await client.auth.signInWithPassword({ email, password });
-    if (signInError) setError('Email ou password inválidos.');
+    if (signInError) setError('Email ou password inválidos.');else await logPlatformAccess();
     setLoading(false);
   };
   return <div className="auth-page"><form className="auth-card" onSubmit={(event) => void submit(event)}>
