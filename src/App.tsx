@@ -4,7 +4,7 @@ import type { AnalysisResult, Movement } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
 import { classifyMovement } from './lib/movementType';
-import { saveHistorySnapshot } from './lib/history';
+import { currentHistory, loadHistory, saveHistorySnapshot } from './lib/history';
 import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 
@@ -142,7 +142,7 @@ function Guide() {
 export default function App() {
   const identity = useAuth();
   const [tool, setTool] = useState<'portal' | 'realtime' | 'stc'>('portal');
-  const [view, setView] = useState<'import' | 'results' | 'guide' | 'history' | 'users' | 'audit'>('import');
+  const [view, setView] = useState<'import' | 'results' | 'guide' | 'history' | 'users' | 'audit'>(() => currentHistory(loadHistory()).length ? 'results' : 'import');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({ percent: 0, stage: 'A aguardar ficheiro' });
@@ -162,7 +162,7 @@ export default function App() {
   if (tool === 'stc') return <div className="tool-placeholder"><div><div className="tool-card-icon"><ArrowLeftRight size={30}/></div><p className="eyebrow">NOVA FERRAMENTA</p><h1>Reconciliação STC</h1><h2>Sistema de Transferências a Crédito</h2><p>A estrutura está reservada e será desenvolvida com regras, importações e histórico próprios.</p><button className="primary-button" onClick={() => setTool('portal')}>Voltar às ferramentas</button></div></div>;
   return <div className="app-shell">
     <aside><div className="brand"><div className="brand-mark">R</div><div><strong>Reconciliação</strong><span>Real Time</span></div></div><button className="tool-switcher" onClick={() => setTool('portal')}><Grid2X2 size={17}/>Todas as ferramentas</button>
-      <nav><button className={view === 'results' ? 'active' : ''} disabled={!result && !busy} title={result || busy ? 'Voltar aos resultados da reconciliação' : 'Carregue primeiro um ficheiro'} onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><BookOpen size={19}/>Como funciona</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
+      <nav><button className={view === 'results' ? 'active' : ''} title="Abrir o último dashboard de resultados" onClick={() => setView('results')}><BarChart3 size={19}/>Resultados</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><BookOpen size={19}/>Como funciona</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}<button className={`nav-import ${view === 'import' ? 'active' : ''}`} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button></nav>
       <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
     </aside>
     <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
@@ -172,6 +172,7 @@ export default function App() {
       </section>}
       {view === 'results' && busy && <ProcessingDashboard fileName={processingFile} progress={progress}/>}
       {view === 'results' && !busy && result && <><div className="actions"><button className="secondary-button" onClick={() => setView('import')}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
+      {view === 'results' && !busy && !result && <><div className="saved-result-heading"><div><p className="eyebrow">ÚLTIMO RESULTADO GUARDADO</p><h2>Resumo da reconciliação</h2><p>O dashboard permanece disponível depois de sair ou atualizar a plataforma.</p></div><button className="primary-button" onClick={() => setView('import')}>Importar novo extrato</button></div><HistoryDashboard revision={historyRevision}/></>}
       {view === 'guide' && <Guide/>}
       {view === 'history' && <HistoryDashboard revision={historyRevision}/>}
       {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
