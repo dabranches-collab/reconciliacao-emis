@@ -1,0 +1,32 @@
+export type ReconciliationStatus = 'automatic' | 'manual' | 'unreconciled' | 'missing_idtr' | 'data_error';
+
+export interface Movement {
+  id: string;
+  row: number;
+  reportDate: string;
+  account: string;
+  amount: number;
+  currency: string;
+  operationNumber: string;
+  description: string;
+  complementaryInfo: string;
+  idtr: string | null;
+  status: ReconciliationStatus;
+  groupId?: string;
+}
+
+export interface ReconciliationGroup {
+  id: string;
+  idtr: string;
+  movementIds: string[];
+  balance: number;
+  status: ReconciliationStatus;
+}
+
+export interface AnalysisResult {
+  reportDate: string;
+  accountingBalance: number | null;
+  movements: Movement[];
+  groups: ReconciliationGroup[];
+  totals: { movements: number; automatic: number; manual: number; unreconciled: number; missingIdtr: number; amount: number };
+}
