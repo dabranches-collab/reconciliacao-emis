@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Activity, FileSpreadsheet, LayoutDashboard, Search, ShieldCheck, Upload, Users } from 'lucide-react';
+import { Activity, FileSpreadsheet, History, Search, ShieldCheck, Upload, Users } from 'lucide-react';
 import type { AnalysisResult, Movement } from './types';
 import { analyzeWorkbook } from './lib/excel';
+import { useAuth } from './AuthGate';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
 
@@ -36,6 +37,8 @@ function Results({ result }: { result: AnalysisResult }) {
 }
 
 export default function App() {
+  const identity = useAuth();
+  const [view, setView] = useState<'import' | 'history' | 'users' | 'audit'>('import');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -46,16 +49,21 @@ export default function App() {
     try { setResult(await analyzeWorkbook(file)); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); }
     finally { setBusy(false); }
   };
+  const pageTitle = view === 'import' ? (result ? 'Resultados da reconciliação' : 'Nova reconciliação') : view === 'history' ? 'Histórico de análises' : view === 'users' ? 'Gestão de utilizadores' : 'Auditoria da plataforma';
+  const pageDescription = view === 'import' ? (result ? 'Consulte os resultados e exceções identificadas.' : 'Arraste o ficheiro diário e receba os resultados automaticamente.') : view === 'history' ? 'Consulte os carregamentos e resultados anteriores.' : view === 'users' ? 'Crie, edite, ative ou bloqueie utilizadores.' : 'Consulte ações, reconciliações e exportações realizadas.';
   return <div className="app-shell">
     <aside><div className="brand"><div className="brand-mark">R</div><div><strong>Reconciliação</strong><span>EMIS Real Time</span></div></div>
-      <nav><button className="active"><LayoutDashboard size={19}/>Análise</button><button><FileSpreadsheet size={19}/>Histórico</button><button><Users size={19}/>Utilizadores</button><button><Activity size={19}/>Auditoria</button></nav>
-      <div className="admin"><ShieldCheck size={18}/><div><strong>Administrador</strong><span>dabranches@gmail.com</span></div></div>
+      <nav><button className={view === 'import' ? 'active' : ''} onClick={() => setView('import')}><Upload size={19}/>Importar ficheiro</button><button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}><History size={19}/>Histórico</button>{identity.isAdmin && <button className={view === 'users' ? 'active' : ''} onClick={() => setView('users')}><Users size={19}/>Utilizadores</button>}{identity.isAdmin && <button className={view === 'audit' ? 'active' : ''} onClick={() => setView('audit')}><Activity size={19}/>Auditoria</button>}</nav>
+      <div className="admin" title={identity.email}><ShieldCheck size={18}/><div><strong>{identity.name}</strong><span>{identity.isAdmin ? 'Administrador' : identity.role === 'auditor' ? 'Auditor' : 'Analista'}</span></div></div>
     </aside>
-    <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{result ? 'Resultados da reconciliação' : 'Nova reconciliação'}</h1><p>{result ? 'Consulte os resultados e exceções identificadas.' : 'Arraste o ficheiro diário e receba os resultados automaticamente.'}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
-      {!result && <section className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
+    <main><header><div><p className="eyebrow">PAINEL OPERACIONAL</p><h1>{pageTitle}</h1><p>{pageDescription}</p></div><button className="icon-button" title="Pesquisar"><Search size={20}/></button></header>
+      {view === 'import' && !result && <section className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); void process(e.dataTransfer.files[0]); }}>
         <div className="upload-icon"><Upload size={30}/></div><h2>{busy ? 'A processar o ficheiro…' : 'Arraste o ficheiro Excel para aqui'}</h2><p>A plataforma identifica automaticamente a data, movimentos, IDTR e saldo contabilístico.</p><label className="primary-button">Selecionar ficheiro<input type="file" accept=".xlsx,.xls,.xlsm" disabled={busy} onChange={(e) => void process(e.target.files?.[0])}/></label><small>Formatos aceites: XLSX, XLS e XLSM</small>{error && <div className="error">{error}</div>}
       </section>}
-      {result && <><div className="actions"><button className="secondary-button" onClick={() => setResult(null)}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
+      {view === 'import' && result && <><div className="actions"><button className="secondary-button" onClick={() => setResult(null)}>Analisar outro ficheiro</button><button className="primary-button">Integrar novos movimentos</button></div><Results result={result}/></>}
+      {view === 'history' && <section className="panel empty-state"><FileSpreadsheet size={28}/><h2>Ainda não existem análises guardadas</h2><p>Os carregamentos persistidos aparecerão aqui por data e lote.</p><button className="primary-button" onClick={() => setView('import')}>Importar primeiro ficheiro</button></section>}
+      {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
+      {view === 'audit' && identity.isAdmin && <section className="panel empty-state"><Activity size={28}/><h2>Log de utilização</h2><p>As ações da plataforma serão apresentadas aqui com filtros e exportação.</p></section>}
     </main>
   </div>;
 }
