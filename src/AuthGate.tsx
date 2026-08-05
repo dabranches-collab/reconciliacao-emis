@@ -40,7 +40,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     setLoading(false);
   };
   return <div className="auth-page"><form className="auth-card" onSubmit={(event) => void submit(event)}>
-    <div className="auth-logo"><LockKeyhole size={27}/></div><p className="eyebrow">RECONCILIAÇÃO EMIS</p><h1>Entrar na plataforma</h1><p>Acesso reservado a utilizadores autorizados.</p>
+    <img className="keve-logo auth-keve-logo" src="/keve-logo-purple.png" alt="Keve — O Banco que avança"/><div className="auth-logo"><LockKeyhole size={27}/></div><p className="eyebrow">RECONCILIAÇÃO EMIS</p><h1>Entrar na plataforma</h1><p>Acesso reservado a utilizadores autorizados.</p>
     <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)}/></label>
     <label>Password<input type="password" autoComplete="current-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)}/></label>
     {error && <div className="error">{error}</div>}<button className="primary-button" disabled={loading}>{loading ? 'A entrar…' : 'Entrar'}</button>
