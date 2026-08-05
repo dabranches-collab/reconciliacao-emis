@@ -22,6 +22,11 @@ function download(blob:Blob,name:string){const url=URL.createObjectURL(blob),anc
 
 function ColumnFilter({column,values,selected,onChange}:{column:typeof columns[number];values:string[];selected:string[];onChange:(values:string[])=>void}){
   const [query,setQuery]=useState(''); const shown=values.filter(value=>value.toLocaleLowerCase('pt').includes(query.toLocaleLowerCase('pt')));
+  if(column.key==='reportDate'){
+    const included=values.filter(value=>!selected.includes(value));
+    const chosen=included.length===1?included[0]:'';
+    return <details className="column-filter date-filter"><summary title="Filtrar Data"><ChevronDown size={12}/></summary><div><strong>Filtrar Data</strong><label><span>Selecionar dia</span><input type="date" value={chosen} min={values.at(0)??''} max={values.at(-1)??''} onChange={event=>onChange(event.target.value?values.filter(value=>value!==event.target.value):[])}/></label><nav><button type="button" onClick={()=>onChange([])}>Mostrar todos</button></nav></div></details>;
+  }
   return <details className="column-filter"><summary title={`Filtrar ${column.label}`}><ChevronDown size={12}/></summary><div><strong>Filtrar {column.label}</strong><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Procurar valor…"/><nav><button type="button" onClick={()=>onChange([])}>Todos</button><button type="button" onClick={()=>onChange(values)}>Limpar</button></nav><section>{shown.map(value=><label key={value}><input type="checkbox" checked={!selected.includes(value)} onChange={()=>onChange(selected.includes(value)?selected.filter(item=>item!==value):[...selected,value])}/><span>{value}</span></label>)}</section></div></details>;
 }
 
