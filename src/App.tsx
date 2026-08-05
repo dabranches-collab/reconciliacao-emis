@@ -50,12 +50,12 @@ function Results({ result }: { result: AnalysisResult }) {
       return { ...type, ...count, rate: count.total ? Math.round((count.reconciled / count.total) * 100) : 0 };
     });
   }, [result]);
-  const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado automaticamente', manual: 'Reconciliado manualmente', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
+  const statusLabel = (movement: Movement) => ({ automatic: 'Reconciliado no ficheiro', manual: 'Reconciliado manualmente na plataforma', unreconciled: 'Não reconciliado', missing_idtr: 'Sem IDTR', data_error: 'Erro de dados' })[movement.status];
   return <>
     <section className="metrics">
       <Metric label="Total movimentos" value={result.totals.movements.toLocaleString('pt-AO')} />
-      <Metric label="Reconciliados automaticamente" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
-      <Metric label="Reconciliados manualmente" value={result.totals.manual.toLocaleString('pt-AO')} tone="manual" />
+      <Metric label="Reconciliados no ficheiro" value={result.totals.automatic.toLocaleString('pt-AO')} tone="good" />
+      <Metric label="Reconciliados manualmente na plataforma" value={result.totals.manual.toLocaleString('pt-AO')} tone="manual" />
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
       <Metric label={`Sem IDTR (${missingBySheet.realTime} REAL TIME + ${missingBySheet.rec} REC)`} value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
@@ -82,7 +82,7 @@ function Results({ result }: { result: AnalysisResult }) {
     </section>
     <section className="panel">
       <div className="panel-head"><div><h2>Detalhe dos movimentos analisados</h2><p>Reporte de {result.reportDate || 'data não identificada'}</p></div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados automaticamente</option><option value="manual">Reconciliados manualmente</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos os estados</option><option value="automatic">Reconciliados no ficheiro</option><option value="manual">Reconciliados manualmente na plataforma</option><option value="unreconciled">Não reconciliados</option><option value="missing_idtr">Sem IDTR</option></select>
       </div>
       <div className="table-wrap"><table><thead><tr><th>Linha</th><th>Data</th><th>IDTR</th><th>Descrição</th><th>Valor</th><th>Estado</th></tr></thead><tbody>{rows.map((m) => <tr key={m.id}><td>{m.row}</td><td>{m.reportDate}</td><td className="mono">{m.idtr ?? '—'}</td><td>{m.description}</td><td className="amount">{money.format(m.amount)}</td><td><span className={`badge ${m.status}`}>{statusLabel(m)}</span></td></tr>)}</tbody></table></div>
       {rows.length === 250 && <p className="table-note">A mostrar os primeiros 250 movimentos do filtro selecionado.</p>}

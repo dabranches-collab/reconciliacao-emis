@@ -49,7 +49,9 @@ export async function analyzeWorkbook(file: File): Promise<AnalysisResult> {
       const info = text(row[7]);
       const idtr = normalizeIdtr(row[8]) ?? normalizeIdtr(info);
       const workbookStatus = text(row[9]);
-      const status = !idtr ? 'missing_idtr' : workbookStatus === 'OK' ? 'manual' : workbookStatus.toLowerCase() === 'ok' ? 'automatic' : 'unreconciled';
+      // No ficheiro de origem, "Ok" e "OK" são a mesma classificação;
+      // a capitalização varia por introdução manual e não identifica a origem.
+      const status = !idtr ? 'missing_idtr' : workbookStatus.toLowerCase() === 'ok' ? 'automatic' : 'unreconciled';
       reconciledMovements.push({
         id: `${file.name}:REC:${index + 2}`,
         row: index + 2,
