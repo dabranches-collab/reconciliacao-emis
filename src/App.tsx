@@ -53,6 +53,7 @@ import { demoResult } from "./demoData";
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
 import { runV2Import } from "./v2/runImport";
 import { loadLatestV2Dashboard } from "./v2/database";
+import V2History from "./v2/V2History";
 import V2Results from "./v2/V2Results";
 import type { V2Dashboard } from "./v2/database";
 
@@ -1376,7 +1377,7 @@ export default function App() {
             para a base central
           </div>
         )}
-        {!(view === "results" && (busy || v2Dashboard)) && <RealTimeOverview revision={historyRevision} result={result} />}
+        {(!REALTIME_V2_ACTIVE || identity.isDemo) && <RealTimeOverview revision={historyRevision} result={result} />}
         {view === "import" && (
           <section
             className={`dropzone compact-dropzone ${dragging ? "dragging" : ""}`}
@@ -1445,7 +1446,7 @@ export default function App() {
           />
         )}
         {view === "guide" && <Guide />}
-        {view === "history" && <HistoryDashboard result={result} />}
+        {view === "history" && (REALTIME_V2_ACTIVE?<V2History/>:<HistoryDashboard result={result} />)}
         {view === "movements" && (
           <DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />
         )}
