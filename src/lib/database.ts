@@ -69,6 +69,8 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
     const refreshed=await supabase.rpc('refresh_accumulated_reconciliation_bucket',{p_analysis_id:context.analysisId,p_bucket:bucket,p_bucket_count:16});
     if(refreshed.error)throw refreshed.error;
   }
+  const secondary=await supabase.rpc('refresh_secondary_reconciliation',{p_analysis_id:context.analysisId});
+  if(secondary.error)throw secondary.error;
   const rebuiltMetrics=await supabase.rpc('refresh_reconciliation_daily_metrics',{p_analysis_id:context.analysisId});
   if(rebuiltMetrics.error)throw rebuiltMetrics.error;
   const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
@@ -84,7 +86,7 @@ export async function failPersistentImport(context:PersistenceContext,message:st
   if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_failed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{message}});
 }
 
-const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:Number(row.source_row),reportDate:String(row.movement_date??row.accounting_date??''),account:String(row.account??''),amount:Number(row.amount),currency:String(row.currency??'AOA'),operationNumber:String(row.operation_number??''),description:String(row.description??''),complementaryInfo:String(row.complementary_info??''),idtr:row.idtr?String(row.idtr):null,status:row.status as Movement['status']});
+const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:Number(row.source_row),reportDate:String(row.accounting_date??row.movement_date??''),account:String(row.account??''),amount:Number(row.amount),currency:String(row.currency??'AOA'),operationNumber:String(row.operation_number??''),description:String(row.description??''),complementaryInfo:String(row.complementary_info??''),idtr:row.idtr?String(row.idtr):null,status:row.status as Movement['status']});
 const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
 
 export type MovementDateRange={from?:string;to?:string;excludeOpening?:boolean};
@@ -92,8 +94,8 @@ export async function loadMovementsByStatus(analysisId:string,statuses:Movement[
   if(!statuses.length)return{rows:[] as Movement[],total:0};
   let builder=supabase.from('movements').select(movementColumns,withCount?{count:'exact'}:{}).eq('analysis_id',analysisId).in('status',statuses);
   if(dateRange.excludeOpening!==false)builder=builder.eq('opening_boundary',false);
-  if(dateRange.from)builder=builder.gte('movement_date',dateRange.from);
-  if(dateRange.to)builder=builder.lte('movement_date',dateRange.to);
+  if(dateRange.from)builder=builder.gte('accounting_date',dateRange.from);
+  if(dateRange.to)builder=builder.lte('accounting_date',dateRange.to);
   const query=await builder.order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
   if(query.error)throw query.error;
   return{rows:(query.data??[]).map(row=>dbMovement(row as Record<string,unknown>)),total:query.count??0};

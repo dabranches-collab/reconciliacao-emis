@@ -12,6 +12,18 @@ const iso = (value:unknown) => { const s=String(value??'').replace(/\D/g,''); re
 const colIndex = (ref:string) => { let n=0; for(const c of ref.match(/[A-Z]+/)?.[0]??'') n=n*26+c.charCodeAt(0)-64; return n-1; };
 const timeValue=(value:unknown)=>{const digits=String(value??'').replace(/\D/g,'').padStart(6,'0').slice(-6);return `${digits.slice(0,2)}:${digits.slice(2,4)}:${digits.slice(4)}`;};
 const fingerprint=(values:unknown[])=>{let a=2166136261,b=2246822507;const text=values.map(value=>String(value??'').trim()).join('\u001f');for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b^code,3266489917);}return `${(a>>>0).toString(16).padStart(8,'0')}${(b>>>0).toString(16).padStart(8,'0')}`;};
+const headerKey=(value:unknown)=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const descriptionKey=(value:unknown)=>headerKey(value).replace(/^anl\s+/,'');
+const reference26=(value:unknown)=>/^\s*\/(26\d+)\s*$/.exec(String(value??''))?.[1]??null;
+type Columns={account:number;value:number;currency:number;description:number;balance:number;systemDate:number;systemTime:number;accountingDate:number;operation:number;observations:number;complementary:number};
+const aliases:Record<keyof Columns,string[]>={
+  account:['Conta contabilística','MRCCB'],value:['Valor do movimento','MRVLR'],currency:['Moeda','MRMOED'],description:['Descritivo movimento','MRDMOV'],balance:['Saldo após movimento','MRSALD'],systemDate:['Data de sistema','MRDTSIS'],systemTime:['Hora de sistema','MRHORA'],accountingDate:['Periodo contabilístico de lançamento','MRDATL'],operation:['Número da operação','MRNOPR'],observations:['Observações','MROBS'],complementary:['Informação Complementar do movimento','GBMRINFC'],
+};
+function resolveColumns(row:unknown[]):Columns|null{
+  const found=new Map(row.map((value,index)=>[headerKey(value),index])); const result={} as Columns;
+  for(const [field,names] of Object.entries(aliases) as [keyof Columns,string[]][]){const index=names.map(headerKey).map(name=>found.get(name)).find(value=>value!==undefined);if(index===undefined)return null;result[field]=index;}
+  return result;
+}
 async function persistMovements(context:PersistenceContext,rows:Record<string,unknown>[]){
   if(!rows.length)return;
   const response=await fetch(`${context.url}/rest/v1/movements?on_conflict=analysis_id,fingerprint`,{method:'POST',headers:{apikey:context.key,Authorization:`Bearer ${context.accessToken}`,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(rows)});
@@ -61,37 +73,39 @@ export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onPro
   if(!sheet||!strings) throw new Error('Não foi encontrada a folha principal ou o dicionário do extrato.');
   onProgress({percent:4,stage:'A ler o dicionário do extrato'}); const shared=parseStrings(await entryText(buffer,strings));
   const types=Object.fromEntries((['pos','atm','transfer','commission','service','other'] as MovementTypeKey[]).map(k=>[k,{total:0,reconciled:0,unreconciled:0,missingIdtr:0}])) as Record<MovementTypeKey,TypeTotals>;
-  const groups=new Map<string,[number,number,number,number]>(); let header=-1,valid=0,minOperational='',maxOperational='',maxAccounting='',closingBalance:number|null=null,openingBalance:number|null=null;
+  const groups=new Map<string,[number,number,number,number]>(); let header=-1,columns:Columns|null=null,valid=0,minAccounting='',maxSystem='',maxAccounting='',closingBalance:number|null=null,openingBalance:number|null=null,balanceErrors=0;const previousBalances=new Map<string,number>();
   onProgress({percent:12,stage:'A identificar e agrupar movimentos do extrato'});
   await scanRows(buffer,sheet,shared,async(row,n)=>{
-    if(header<0){if(row.includes('MRCCB')) header=n;return;}
-    const signed=Number(row[9]); if(!Number.isFinite(signed)) return; valid++; if(openingBalance===null&&Number.isFinite(Number(row[12]))) openingBalance=Number(row[12])-signed;
-    const operational=iso(row[14]); if(operational) minOperational=!minOperational||operational<minOperational?operational:minOperational;
-    const idtr=normalizeIdtr(row[21]); if(idtr){const day=operational?Math.floor(Date.parse(operational)/86400000):0,current=groups.get(idtr);if(current){current[0]+=Math.round(signed*100);current[1]=Math.min(current[1],day);current[2]=Math.max(current[2],day);current[3]++;}else groups.set(idtr,[Math.round(signed*100),day,day,1]);}
-    maxOperational=[maxOperational,operational].sort().at(-1)??maxOperational; maxAccounting=[maxAccounting,iso(row[16])].sort().at(-1)??maxAccounting; closingBalance=Number(row[12]);
+    if(header<0){const resolved=resolveColumns(row);if(resolved){columns=resolved;header=n;}return;} const c=columns!;
+    const signed=Number(row[c.value]); if(!Number.isFinite(signed)) return; valid++; const balance=Number(row[c.balance]),account=String(row[c.account]??'');if(openingBalance===null&&Number.isFinite(balance)) openingBalance=balance-signed;
+    const systemDate=iso(row[c.systemDate]),accounting=iso(row[c.accountingDate])||systemDate;if(accounting) minAccounting=!minAccounting||accounting<minAccounting?accounting:minAccounting;
+    const previous=previousBalances.get(account);if(previous!==undefined&&Number.isFinite(balance)&&Math.abs(previous+signed-balance)>0.011)balanceErrors++;if(Number.isFinite(balance))previousBalances.set(account,balance);
+    const idtr=normalizeIdtr(row[c.complementary]); if(idtr){const day=accounting?Math.floor(Date.parse(accounting)/86400000):0,current=groups.get(idtr);if(current){current[0]+=Math.round(signed*100);current[1]=Math.min(current[1],day);current[2]=Math.max(current[2],day);current[3]++;}else groups.set(idtr,[Math.round(signed*100),day,day,1]);}
+    maxSystem=[maxSystem,systemDate].sort().at(-1)??maxSystem; maxAccounting=[maxAccounting,accounting].sort().at(-1)??maxAccounting; closingBalance=balance;
     if(valid%10000===0) onProgress({percent:12+Math.min(36,Math.round(valid/25000)),stage:'A agrupar movimentos por IDTR',processed:valid,total:valid});
   });
-  if(header<0) throw new Error('Este ficheiro não contém os cabeçalhos de um extrato Real Time (MRCCB, MRVLR, MRDTSIS…).');
+  if(header<0) throw new Error('Não foram encontrados todos os cabeçalhos obrigatórios do extrato Real Time.');
+  if(balanceErrors)throw new Error(`A sequência contabilística contém ${balanceErrors.toLocaleString('pt-AO')} inconsistência(s) entre o valor e o saldo.`);
   const timingBuckets:Record<string,number>={'D+0':0,'D+1':0,'D+2':0,'D+3':0,'D+4+':0}; let timingDays=0,timingGroups=0;
   for(const [sum,min,max] of groups.values()) if(sum===0){const delay=Math.max(0,max-min);timingGroups++;timingDays+=delay;timingBuckets[delay===0?'D+0':delay===1?'D+1':delay===2?'D+2':delay===3?'D+3':'D+4+']++;}
-  const reportDate=maxAccounting||maxOperational, samples:Movement[]=[], sampleCounts:Record<ReconciliationStatus,number>={automatic:0,manual:0,unreconciled:0,missing_idtr:0,data_error:0};
+  const reportDate=maxAccounting||maxSystem, samples:Movement[]=[], sampleCounts:Record<ReconciliationStatus,number>={automatic:0,manual:0,unreconciled:0,missing_idtr:0,data_error:0};
   const totals={movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amountCents:0}; let debitCents=0,creditCents=0; const ageBuckets:Record<string,{total:number;automatic:number;unreconciled:number;amount:number}>={};
   const dailyCents:Record<string,{movements:number;automatic:number;unreconciled:number;missingIdtr:number;amount:number}>={};
   onProgress({percent:52,stage:persistence?'A validar e guardar movimentos na base central':'A validar grupos e calcular a idade das pendências'}); let processed=0;const databaseRows:Record<string,unknown>[]=[];
   await scanRows(buffer,sheet,shared,async(row,n)=>{
-    if(n<=header) return; const signed=Number(row[9]); if(!Number.isFinite(signed)) return; processed++;
-    const idtr=normalizeIdtr(row[21]), status:ReconciliationStatus=!idtr?'missing_idtr':groups.get(idtr)?.[0]===0?'automatic':'unreconciled';
-    const operational=iso(row[14]), age=operational&&reportDate?Math.max(0,Math.round((Date.parse(reportDate)-Date.parse(operational))/86400000)):0; const bucket=age===0?'D+0':age===1?'D+1':age===2?'D+2':age===3?'D+3':age<=7?'D+4–7':'D+8+';
+    if(n<=header) return; const c=columns!,signed=Number(row[c.value]); if(!Number.isFinite(signed)) return; processed++;
+    const complementary=String(row[c.complementary]??''),observations=String(row[c.observations]??''),idtr=normalizeIdtr(complementary), status:ReconciliationStatus=!idtr?'missing_idtr':groups.get(idtr)?.[0]===0?'automatic':'unreconciled';
+    const systemDate=iso(row[c.systemDate]),accounting=iso(row[c.accountingDate])||systemDate,age=accounting&&reportDate?Math.max(0,Math.round((Date.parse(reportDate)-Date.parse(accounting))/86400000)):0; const bucket=age===0?'D+0':age===1?'D+1':age===2?'D+2':age===3?'D+3':age<=7?'D+4–7':'D+8+';
     const b=ageBuckets[bucket]??={total:0,automatic:0,unreconciled:0,amount:0};b.total++;b.amount+=signed;if(status==='automatic')b.automatic++;else b.unreconciled++;
     totals.movements++;totals.amountCents+=Math.round(signed*100);if(signed<0)debitCents+=Math.abs(Math.round(signed*100));else creditCents+=Math.round(signed*100);if(status==='automatic')totals.automatic++;else if(status==='missing_idtr')totals.missingIdtr++;else totals.unreconciled++;
-    const accounting=iso(row[16])||operational; if(accounting){const day=dailyCents[accounting]??={movements:0,automatic:0,unreconciled:0,missingIdtr:0,amount:0};day.movements++;day.amount+=Math.round(signed*100);if(status==='automatic')day.automatic++;else if(status==='missing_idtr')day.missingIdtr++;else day.unreconciled++;}
-    const description=String(row[11]??''), t=types[classifyMovement(description)];t.total++;if(status==='automatic')t.reconciled++;else if(status==='missing_idtr')t.missingIdtr++;else t.unreconciled++;
-    if(persistence){const account=String(row[1]??''),operation=String(row[7]??''),complementary=String(row[21]??''),accounting=iso(row[16])||operational;databaseRows.push({analysis_id:persistence.analysisId,batch_id:persistence.batchId,source_row:n,movement_date:operational||null,movement_time:timeValue(row[15]),accounting_date:accounting||null,account,amount:signed,currency:String(row[10]??'AOA'),operation_number:operation,description,complementary_info:complementary,balance:Number.isFinite(Number(row[12]))?Number(row[12]):null,idtr,status,fingerprint:fingerprint([operational,timeValue(row[15]),account,operation,signed,description,complementary])});if(databaseRows.length>=1000){await persistMovements(persistence,databaseRows.splice(0,databaseRows.length));}}
-    if(sampleCounts[status]<300){samples.push({id:`${fileName}:${n}`,row:n,reportDate:operational,account:String(row[1]??''),amount:signed,currency:String(row[10]??''),operationNumber:String(row[7]??''),description,complementaryInfo:String(row[21]??''),idtr,status});sampleCounts[status]++;}
+    if(accounting){const day=dailyCents[accounting]??={movements:0,automatic:0,unreconciled:0,missingIdtr:0,amount:0};day.movements++;day.amount+=Math.round(signed*100);if(status==='automatic')day.automatic++;else if(status==='missing_idtr')day.missingIdtr++;else day.unreconciled++;}
+    const description=String(row[c.description]??''),descriptionNormalized=descriptionKey(description),t=types[classifyMovement(description)];t.total++;if(status==='automatic')t.reconciled++;else if(status==='missing_idtr')t.missingIdtr++;else t.unreconciled++;
+    if(persistence){const account=String(row[c.account]??''),operation=String(row[c.operation]??''),reference=reference26(observations);databaseRows.push({analysis_id:persistence.analysisId,batch_id:persistence.batchId,source_row:n,movement_date:systemDate||null,movement_time:timeValue(row[c.systemTime]),accounting_date:accounting||null,account,amount:signed,currency:String(row[c.currency]??'AOA'),operation_number:operation,description,description_normalized:descriptionNormalized,observations,complementary_info:complementary,balance:Number.isFinite(Number(row[c.balance]))?Number(row[c.balance]):null,idtr,reference_26:reference,status,reconciliation_method:status==='automatic'?'idtr':null,reconciliation_key:status==='automatic'?idtr:null,reconciliation_rule_version:status==='automatic'?'rt-v2':null,fingerprint:fingerprint([systemDate,timeValue(row[c.systemTime]),accounting,account,operation,signed,description,observations,complementary])});if(databaseRows.length>=1000){await persistMovements(persistence,databaseRows.splice(0,databaseRows.length));}}
+    if(sampleCounts[status]<300){samples.push({id:`${fileName}:${n}`,row:n,reportDate:accounting,account:String(row[c.account]??''),amount:signed,currency:String(row[c.currency]??''),operationNumber:String(row[c.operation]??''),description,complementaryInfo:complementary,idtr,status});sampleCounts[status]++;}
     if(processed%10000===0) onProgress({percent:52+Math.round((processed/Math.max(1,valid))*46),stage:'A validar movimentos e calcular indicadores',processed,total:valid,liveTotals:{movements:totals.movements,automatic:totals.automatic,unreconciled:totals.unreconciled,missingIdtr:totals.missingIdtr},liveMovementTypes:types});
   });
   if(persistence&&databaseRows.length)await persistMovements(persistence,databaseRows);
   onProgress({percent:100,stage:'Análise do extrato concluída'});
   const dailyMetrics=Object.fromEntries(Object.entries(dailyCents).map(([day,value])=>[day,{...value,amount:value.amount/100}]));
-  return {sourceMode:'raw_extract',periodStart:minOperational,reportDate,accountingBalance:closingBalance,movements:samples,groups:[],totals:{movements:totals.movements,automatic:totals.automatic,manual:0,unreconciled:totals.unreconciled,missingIdtr:totals.missingIdtr,amount:totals.amountCents/100},movementTypes:types,ageBuckets,rawAmounts:{debits:debitCents/100,credits:creditCents/100,net:totals.amountCents/100,openingBalance,closingBalance},reconciliationTiming:{averageDays:timingGroups?timingDays/timingGroups:0,totalGroups:timingGroups,buckets:timingBuckets},dailyMetrics};
+  return {sourceMode:'raw_extract',periodStart:minAccounting,reportDate,accountingBalance:closingBalance,movements:samples,groups:[],totals:{movements:totals.movements,automatic:totals.automatic,manual:0,unreconciled:totals.unreconciled,missingIdtr:totals.missingIdtr,amount:totals.amountCents/100},movementTypes:types,ageBuckets,rawAmounts:{debits:debitCents/100,credits:creditCents/100,net:totals.amountCents/100,openingBalance,closingBalance},reconciliationTiming:{averageDays:timingGroups?timingDays/timingGroups:0,totalGroups:timingGroups,buckets:timingBuckets},dailyMetrics};
 }
