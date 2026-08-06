@@ -125,7 +125,8 @@ const movementTypes = [
 ] as const;
 
 function Results({ result }: { result: AnalysisResult }) {
-  const central = result as AnalysisResult & { analysisId?: string };
+  const central = result as AnalysisResult & { analysisId?: string;importHistory?:CentralImport[] };
+  const latestImport=central.importHistory?.[0];
   const [excludeBoundaries, setExcludeBoundaries] = useState(true),
     [boundary, setBoundary] = useState<BoundaryBalanceSummary | null>(null);
   const displayedPendingBalance = boundary
@@ -183,6 +184,15 @@ function Results({ result }: { result: AnalysisResult }) {
   }, [result]);
   return (
     <>
+      {latestImport&&(
+        <section className={`server-job-card ${latestImport.status}`} role="status">
+          <div><span className="processing-pulse"/><div><small>PROCESSAMENTO NO SERVIDOR</small><strong>{latestImport.status==='completed'?'Concluído':latestImport.status==='processing'?'Em curso':'Requer atenção'}</strong></div></div>
+          <div><small>Ficheiro</small><b>{latestImport.filename}</b></div>
+          <div><small>Linhas</small><b>{latestImport.movementCount.toLocaleString('pt-AO')}</b></div>
+          <div><small>Conclusão</small><b>{latestImport.completedAt?new Date(latestImport.completedAt).toLocaleString('pt-AO'):'a processar'}</b></div>
+          <p>{latestImport.status==='completed'?'Todos os passos foram fechados e gravados centralmente.':'Pode fechar ou atualizar esta página; o trabalho continuará no servidor.'}</p>
+        </section>
+      )}
       <section className="metrics">
         <Metric
           label="Total movimentos"
@@ -554,6 +564,14 @@ function ProcessingDashboard({
           )}
         </span>
       </div>
+      {progress.storedRows!==undefined&&(
+        <div className="server-progress-meta">
+          <span><b>{progress.storedRows.toLocaleString('pt-AO')}</b> linhas preservadas</span>
+          <span>Tentativa <b>{Math.max(1,progress.attempt??1)}</b></span>
+          <span>Última atividade <b>{progress.heartbeatAt?new Date(progress.heartbeatAt).toLocaleTimeString('pt-AO',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'a confirmar'}</b></span>
+          <span>O processamento continua mesmo que feche esta página</span>
+        </div>
+      )}
       <div className="processing-steps">
         {[
           "Receção",
@@ -816,6 +834,7 @@ export default function App() {
       : "import";
   });
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [centralLoading,setCentralLoading]=useState(true);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({
     percent: 0,
@@ -876,13 +895,31 @@ export default function App() {
       setError("");
       return;
     }
-    let active = true;
-    void loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
-    void loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
+    let active = true;setCentralLoading(true);
+    const recoverableTask=loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
+    const resultTask=loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
+    void Promise.allSettled([recoverableTask,resultTask]).then(()=>{if(active)setCentralLoading(false);});
     return () => {
       active = false;
     };
   }, [identity.isDemo]);
+  useEffect(()=>{
+    if(identity.isDemo||recoverableImport?.processingStage!=='dashboard_summary')return;
+    let active=true;
+    const sync=async()=>{
+      const current=await loadRecoverableImport();if(!active)return;
+      if(!current){
+        setRecoverableImport(null);setBusy(false);
+        const persisted=await loadPersistentResult();if(active&&persisted){setResult(persisted);setHistoryRevision(value=>value+1);}
+        return;
+      }
+      setRecoverableImport(current);setBusy(true);setProcessingFile(current.filename);setView('results');
+      const done=current.dashboardSectionsCompleted??0,total=current.dashboardSectionsTotal??6;
+      setProgress({percent:current.progressPercent??99,stage:`Cálculos protegidos no servidor · etapa ${Math.min(total,done+1)} de ${total}`,processed:done,total,unit:'blocos',storedRows:current.insertedCount,attempt:current.attemptCount,heartbeatAt:current.heartbeatAt});
+    };
+    void sync();const timer=window.setInterval(()=>void sync(),3000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[identity.isDemo,recoverableImport?.id,recoverableImport?.processingStage]);
   const process = async (file?: File) => {
     if (identity.isDemo) {
       setError("A importação está desativada no modo de demonstração.");
@@ -1378,8 +1415,11 @@ export default function App() {
         {view === "results" && busy && (
           <ProcessingDashboard fileName={processingFile} progress={progress} />
         )}
+        {view === "results"&&!busy&&centralLoading&&!result&&(
+          <section className="central-loading" role="status"><div className="processing-spinner"><i/><i/><i/></div><div><p className="eyebrow">A SINCRONIZAR</p><h2>A carregar dados centrais</h2><p>Indicadores, movimentos e histórico estão a ser lidos em paralelo. Não atualize a página.</p></div></section>
+        )}
         {view === "results" && !busy && result && <Results result={result} />}
-        {view === "results" && !busy && !result && (
+        {view === "results" && !busy && !centralLoading && !result && (
           <SavedResults
             revision={historyRevision}
             onImport={() => setView("import")}

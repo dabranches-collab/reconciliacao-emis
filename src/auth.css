@@ -68,6 +68,12 @@ nav button:disabled { cursor: not-allowed; opacity: .42; background: transparent
 .processing-track span i { position: absolute; inset: 0; background: repeating-linear-gradient(115deg,transparent 0 14px,rgba(255,255,255,.35) 14px 24px); animation: processing-stripes .7s linear infinite; }
 .processing-status { display: flex; align-items: center; gap: 10px; color: #526762; font-size: 13px; }
 .processing-status > span:last-child { margin-left: auto; }
+.server-progress-meta { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:11px 13px;border:1px solid #d7e6e1;border-radius:12px;background:#f5faf8;color:#536d65;font-size:11px; }
+.server-progress-meta span { padding:7px 9px;border-radius:8px;background:white; }
+.server-progress-meta b { color:#173f35;font-variant-numeric:tabular-nums; }
+.server-job-card { display:grid;grid-template-columns:auto minmax(180px,1fr) auto auto;align-items:center;gap:14px;margin-bottom:14px;padding:13px 15px;border:1px solid #cfe4dc;border-left:5px solid #18a877;border-radius:13px;background:#f4fbf8;color:#49645b; }
+.server-job-card>div:first-child { display:flex;align-items:center;gap:10px; }.server-job-card>div:first-child strong,.server-job-card b{display:block;color:#173f35}.server-job-card small{display:block;margin-bottom:3px;color:#71847e;font-size:9px;font-weight:800;letter-spacing:.06em}.server-job-card p{grid-column:1/-1;margin:0;padding-top:8px;border-top:1px solid #dcebe6;font-size:11px}.server-job-card.failed{border-left-color:#e34848;background:#fff7f7}.server-job-card.processing{border-left-color:#d99722;background:#fffaf0}
+.central-loading{display:flex;align-items:center;gap:18px;min-height:150px;padding:26px;border-radius:16px;background:linear-gradient(135deg,#241166,#3c19d7);color:white}.central-loading h2{margin:4px 0 7px}.central-loading p{margin:0;color:#dcd5ff}.central-loading .eyebrow{color:#59d6a2}.central-loading .processing-spinner{display:block}
 .line-counter { min-width: 250px; padding: 9px 13px; border: 1px solid #d8e5e1; border-radius: 9px; background: white; color: #60736e; text-align: center; font-variant-numeric: tabular-nums; }
 .line-counter b { color: #137955; font-size: 14px; }
 .counting-dots { display: inline-block; width: 18px; overflow: hidden; vertical-align: bottom; animation: counting-dots 1.2s steps(4,end) infinite; }
@@ -108,7 +114,8 @@ nav button:disabled { cursor: not-allowed; opacity: .42; background: transparent
 @keyframes counting-dots { from { width: 0; } to { width: 18px; } }
 @keyframes metric-count { from { opacity: .35; transform: translateY(3px); } }
 @keyframes metric-flow { to { background-position: -200% 0; } }
-@media(max-width:900px){.processing-steps{grid-template-columns:1fr}.processing-steps div::after{display:none}.processing-metrics,.processing-card-grid{grid-template-columns:1fr 1fr}.processing-spinner{display:none}}
+@media(max-width:900px){.processing-steps{grid-template-columns:1fr}.processing-steps div::after{display:none}.processing-metrics,.processing-card-grid,.server-progress-meta,.server-job-card{grid-template-columns:1fr 1fr}.processing-spinner{display:none}}
+@media(max-width:560px){.server-progress-meta{grid-template-columns:1fr}.processing-status{align-items:flex-start;flex-direction:column}.processing-status>span:last-child{margin-left:0}}
 .guide-page { display: grid; gap: 22px; }
 .guide-hero { display: flex; justify-content: space-between; align-items: center; gap: 28px; padding: 28px 30px; border-radius: 18px; background: linear-gradient(135deg,#143c34,#1a735c); color: white; }
 .guide-hero h2 { margin: 5px 0 8px; font-size: 25px; }

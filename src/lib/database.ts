@@ -3,7 +3,7 @@ import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase';
 
 export type PersistenceContext={url:string;key:string;accessToken:string;analysisId:string;batchId:string};
 export type ImportStatus='processing'|'completed'|'failed';
-export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null;processingStage?:string;progressPercent?:number;processedBucket?:number;totalBuckets?:number};
+export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null;processingStage?:string;progressPercent?:number;processedBucket?:number;totalBuckets?:number;dashboardSectionsCompleted?:number;dashboardSectionsTotal?:number;heartbeatAt?:string|null;attemptCount?:number};
 export type FinalizationProgress={percent:number;stage:string;processed:number;total:number;unit:'blocos'};
 export type AuditLog={id:number;actor:string;email:string;action:string;entityType:string;details:Record<string,unknown>;createdAt:string};
 export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
@@ -22,10 +22,11 @@ export function readableError(cause:unknown,fallback='Ocorreu um erro inesperado
 export async function loadRecoverableImport():Promise<(CentralImport&{analysisId:string})|null>{
   const analysis=await supabase.from('analyses').select('id').eq('name','Reconciliação Real Time').order('created_at',{ascending:true}).limit(1).maybeSingle();
   if(analysis.error)throw analysis.error;if(!analysis.data)return null;
-  const query=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysis.data.id).in('status',['processing','failed']).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
+  const query=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,validation_summary,heartbeat_at,attempt_count,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysis.data.id).in('status',['processing','failed']).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
   if(query.error)throw query.error;if(!query.data)return null;
   const row=query.data,profile=row.profiles as unknown as {full_name?:string;email?:string}|null;
-  return{id:row.id,analysisId:analysis.data.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16)};
+  const validation=(row.validation_summary??{}) as {dashboardSectionsCompleted?:number;dashboardSectionsTotal?:number};
+  return{id:row.id,analysisId:analysis.data.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16),dashboardSectionsCompleted:Number(validation.dashboardSectionsCompleted??0),dashboardSectionsTotal:Number(validation.dashboardSectionsTotal??6),heartbeatAt:row.heartbeat_at,attemptCount:Number(row.attempt_count??0)};
 }
 
 export async function loadBoundaryBalanceSummary(analysisId:string):Promise<BoundaryBalanceSummary>{
@@ -205,14 +206,15 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
     ...stored,
     reconciliationTiming:storedTiming&&Number.isFinite(Number(storedTiming.averageDays))?storedTiming:undefined,
   };
-  const metricsQuery=await supabase.from('daily_metrics').select('metric_date,movements,automatic,unreconciled,missing_idtr,amount').eq('analysis_id',analysisId).order('metric_date',{ascending:true});
+  const [metricsQuery,movementPreview,batches]=await Promise.all([
+    supabase.from('daily_metrics').select('metric_date,movements,automatic,unreconciled,missing_idtr,amount').eq('analysis_id',analysisId).order('metric_date',{ascending:true}),
+    loadMovementsByStatus(analysisId,['unreconciled','missing_idtr'],1000,0,{},false),
+    supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100),
+  ]);
   if(metricsQuery.error)throw metricsQuery.error;
   const dailyMetrics:NonNullable<AnalysisResult['dailyMetrics']>=Object.fromEntries((metricsQuery.data??[]).map(row=>[row.metric_date,{movements:row.movements,automatic:row.automatic,unreconciled:row.unreconciled,missingIdtr:row.missing_idtr,amount:Number(row.amount)}]));
   const consolidatedTotals=Object.values(dailyMetrics).reduce<AnalysisResult['totals']>((totals,day)=>({movements:totals.movements+day.movements,automatic:totals.automatic+day.automatic,manual:totals.manual,unreconciled:totals.unreconciled+day.unreconciled,missingIdtr:totals.missingIdtr+day.missingIdtr,amount:totals.amount+day.amount}),{movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amount:0});
   const metricDates=Object.keys(dailyMetrics).sort();
-  const initialStates:Movement['status'][]=['unreconciled'];if(consolidatedTotals.missingIdtr>0)initialStates.push('missing_idtr');
-  const movementPreview=await loadMovementsByStatus(analysisId,initialStates,1000,0,{},false);
-  const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
   if(batches.error)throw batches.error;
   const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16)};});
   const lastBatch=importHistory.find(item=>item.status==='completed');
