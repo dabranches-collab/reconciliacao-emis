@@ -41,6 +41,8 @@ import {
   loadPersistentResult,
   loadRecoverableImport,
   preparePersistentImport,
+  readableError,
+  resumePersistentFinalization,
   type BoundaryBalanceSummary,
   type CentralImport,
   type PersistenceContext,
@@ -943,10 +945,7 @@ export default function App() {
       setResult(persisted ?? analyzed);
       setHistoryRevision((value) => value + 1);
     } catch (cause) {
-      const message =
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível analisar o ficheiro.";
+      const message = readableError(cause,"Não foi possível analisar o ficheiro.");
       if (persistence && !importFinalized)
         try {
           await failPersistentImport(persistence, message);
@@ -963,6 +962,20 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  };
+  const resumeFinalization = async () => {
+    if(!recoverableImport||busy)return;
+    setBusy(true);setError("");setProcessingFile(recoverableImport.filename);setView("results");
+    setProgress({percent:recoverableImport.progressPercent??88,stage:"A retomar a reconciliação central",processed:Math.max(0,(recoverableImport.processedBucket??-1)+1),total:recoverableImport.totalBuckets??64,unit:"blocos"});
+    try{
+      await resumePersistentFinalization(recoverableImport,(next)=>setProgress(previous=>({...previous,...next})));
+      setRecoverableImport(null);
+      const persisted=await loadPersistentResult();if(persisted)setResult(persisted);
+      setHistoryRevision(value=>value+1);
+    }catch(cause){
+      const message=readableError(cause,"Não foi possível retomar a reconciliação.");setError(message);
+      setRecoverableImport(await loadRecoverableImport());setView("import");
+    }finally{setBusy(false);}
   };
   const refreshData = async () => {
     if (refreshing) return;
@@ -1349,6 +1362,7 @@ export default function App() {
                     Fase: {recoverableImport.processingStage ?? "interrompida"} · {recoverableImport.progressPercent ?? 0}% · bloco {Math.max(0,(recoverableImport.processedBucket ?? -1)+1)} de {recoverableImport.totalBuckets ?? 16} concluído.
                   </small>
                   <p>Selecione novamente este mesmo ficheiro. As linhas já guardadas serão ignoradas e a reconciliação retomará no bloco seguinte.</p>
+                  {recoverableImport.movementCount>0&&recoverableImport.insertedCount+recoverableImport.duplicateCount===recoverableImport.movementCount&&<button type="button" className="primary-button" disabled={busy} onClick={()=>void resumeFinalization()}>Retomar apenas os cálculos</button>}
                 </div>
               </div>
             )}

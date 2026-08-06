@@ -9,6 +9,16 @@ export type AuditLog={id:number;actor:string;email:string;action:string;entityTy
 export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
 export type UnreconciledAgeCounts={all:number;d0:number;upTo1:number;upTo2:number;atLeast1:number;atLeast2:number;atLeast3:number};
 
+export function readableError(cause:unknown,fallback='Ocorreu um erro inesperado.'){
+  if(cause instanceof Error)return cause.message;
+  if(cause&&typeof cause==='object'){
+    const value=cause as {message?:unknown;details?:unknown;hint?:unknown;code?:unknown};
+    const parts=[value.message,value.details,value.hint].filter((part):part is string=>typeof part==='string'&&part.trim().length>0);
+    if(parts.length)return `${parts.join(' · ')}${value.code?` [${String(value.code)}]`:''}`;
+  }
+  return fallback;
+}
+
 export async function loadRecoverableImport():Promise<(CentralImport&{analysisId:string})|null>{
   const analysis=await supabase.from('analyses').select('id').eq('name','Reconciliação Real Time').order('created_at',{ascending:true}).limit(1).maybeSingle();
   if(analysis.error)throw analysis.error;if(!analysis.data)return null;
@@ -64,8 +74,8 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   const duplicateCount=Math.max(0,result.totals.movements-insertedCount);
   const batchState=await supabase.from('import_batches').select('processed_bucket,total_buckets').eq('id',context.batchId).single();
   if(batchState.error)throw batchState.error;
-  const totalBuckets=Math.max(1,Number(batchState.data.total_buckets??16));
   let processedBucket=Number(batchState.data.processed_bucket??-1);
+  const totalBuckets=processedBucket<0?Math.max(64,Number(batchState.data.total_buckets??64)):Math.max(1,Number(batchState.data.total_buckets??64));
   const batchUpdate=await supabase.from('import_batches').update({report_date:result.reportDate||null,movement_count:result.totals.movements,inserted_count:insertedCount,duplicate_count:duplicateCount,status:'processing',processing_stage:'primary_reconciliation',progress_percent:88,failure_message:null,completed_at:null,total_buckets:totalBuckets}).eq('id',context.batchId);
   if(batchUpdate.error)throw batchUpdate.error;
   onProgress?.({percent:88,stage:'Movimentos guardados · a reconciliar grupos IDTR',processed:Math.max(0,processedBucket+1),total:totalBuckets,unit:'blocos'});
@@ -111,9 +121,23 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});
 }
 
+export async function resumePersistentFinalization(item:CentralImport&{analysisId:string},onProgress?:(progress:FinalizationProgress)=>void){
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session)throw new Error('A sessão terminou. Entre novamente antes de retomar.');
+  if(item.movementCount<=0||item.insertedCount+item.duplicateCount!==item.movementCount)throw new Error('Esta importação ainda não tem todas as linhas guardadas. Selecione novamente o ficheiro original.');
+  const analysis=await supabase.from('analyses').select('result_summary').eq('id',item.analysisId).single();
+  if(analysis.error)throw analysis.error;
+  const previous=(analysis.data.result_summary??{}) as Partial<AnalysisResult>;
+  const result:AnalysisResult={sourceMode:'raw_extract',sourceFilename:item.filename,reportDate:item.reportDate??previous.reportDate??'',periodStart:previous.periodStart,accountingBalance:previous.accountingBalance??null,movements:[],groups:[],totals:{movements:item.movementCount,automatic:0,manual:0,unreconciled:item.movementCount,missingIdtr:0,amount:0}};
+  const context:PersistenceContext={url:SUPABASE_URL,key:SUPABASE_PUBLISHABLE_KEY,accessToken:session.access_token,analysisId:item.analysisId,batchId:item.id};
+  const resumed=await supabase.from('import_batches').update({status:'processing',failure_message:null,error_count:0,completed_at:null}).eq('id',item.id);if(resumed.error)throw resumed.error;
+  await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_finalization_resumed',entity_type:'import_batch',entity_id:item.id,analysis_id:item.analysisId,details:{filename:item.filename}});
+  return finalizePersistentImport(result,context,onProgress);
+}
+
 export async function failPersistentImport(context:PersistenceContext,message:string){
   const {data:{session}}=await supabase.auth.getSession();
-  await supabase.from('import_batches').update({status:'failed',processing_stage:'failed',failure_message:message,error_count:1,completed_at:null}).eq('id',context.batchId);
+  await supabase.from('import_batches').update({status:'failed',failure_message:message,error_count:1,completed_at:null}).eq('id',context.batchId);
   if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_failed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{message}});
 }
 
