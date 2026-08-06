@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   CircleEllipsis,
   Clock3,
+  Cog,
   CreditCard,
   Download,
   FileSpreadsheet,
@@ -516,12 +517,21 @@ function ProcessingDashboard({
           : progress.percent < 98
             ? 4
             : 5;
-  const liveMetrics = [
-    ["Total movimentos", progress.liveTotals?.movements],
-    ["Reconciliados por IDTR", progress.liveTotals?.automatic],
-    ["Não reconciliados", progress.liveTotals?.unreconciled],
-    ["Sem IDTR", progress.liveTotals?.missingIdtr],
-  ] as const;
+  const liveMetrics = progress.liveV2
+    ? [
+        { label: "Processados", value: (progress.processed ?? 0).toLocaleString("pt-AO") },
+        { label: "Com IDTR", value: progress.liveV2.withNativeIdtr.toLocaleString("pt-AO") },
+        { label: "Sem IDTR", value: progress.liveV2.withoutNativeIdtr.toLocaleString("pt-AO") },
+        { label: "Referência /26", value: progress.liveV2.reference26.toLocaleString("pt-AO") },
+        { label: "Saldo líquido", value: money.format(progress.liveV2.amountCents / 100) },
+      ]
+    : [
+        { label: "Total movimentos", value: progress.liveTotals?.movements?.toLocaleString("pt-AO") },
+        { label: "Reconciliados por IDTR", value: progress.liveTotals?.automatic?.toLocaleString("pt-AO") },
+        { label: "Não reconciliados", value: progress.liveTotals?.unreconciled?.toLocaleString("pt-AO") },
+        { label: "Sem IDTR", value: progress.liveTotals?.missingIdtr?.toLocaleString("pt-AO") },
+      ];
+  const ingestionComplete = progress.percent >= 82;
   return (
     <section className="processing-dashboard" aria-live="polite">
       <div className="processing-hero">
@@ -599,17 +609,18 @@ function ProcessingDashboard({
         ))}
       </div>
       <div className="processing-metrics">
-        {liveMetrics.map(([label, count]) => (
+        {liveMetrics.map(({label, value}) => (
           <article
-            className={count !== undefined ? "counting" : ""}
+            className={value !== undefined ? `counting ${ingestionComplete ? "metric-done" : ""}` : ""}
             key={label}
           >
             <span>{label}</span>
-            {count === undefined ? (
+            {value === undefined ? (
               <i />
             ) : (
-              <strong>{count.toLocaleString("pt-AO")}</strong>
+              <strong>{value}</strong>
             )}
+            {value !== undefined && <b className="metric-state-icon" title={ingestionComplete ? "Contagem concluída" : "A calcular"}>{ingestionComplete ? <CheckCircle2 size={18}/> : <Cog className="metric-cog" size={18}/>}</b>}
           </article>
         ))}
       </div>
