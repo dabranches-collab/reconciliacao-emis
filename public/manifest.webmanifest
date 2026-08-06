@@ -1,0 +1,14 @@
+{
+  "name": "Reconciliação Real Time",
+  "short_name": "Reconciliação",
+  "description": "Plataforma operacional de reconciliação Real Time",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#3718b4",
+  "lang": "pt",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
