@@ -53,3 +53,12 @@ html,body,#root{max-width:100%;overflow-x:hidden}.app-shell,.app-shell>main,.rt-
   .table-wrap{max-width:100%;overflow:auto}
   .tool-portal>header{height:auto;gap:10px;padding:12px;align-items:flex-start}.portal-header-actions{gap:8px;align-items:flex-end;flex-direction:column}.portal-install{padding:8px 10px}.portal-install-hero{display:flex}
 }
+@media(max-width:900px){
+  .app-shell aside{position:sticky!important;z-index:80;top:0;display:flex;flex-direction:row;align-items:center;gap:6px;width:100%;height:58px;padding:7px 8px;overflow:hidden;box-shadow:0 5px 18px rgba(27,12,78,.24)}
+  .app-shell aside .brand{flex:0 0 64px;margin:0;padding:0}.app-shell aside .brand>div{display:none}.app-shell aside .sidebar-logo{width:62px;height:34px}
+  .app-shell aside .tool-switcher{flex:0 0 38px;width:38px;height:38px;margin:0;padding:0;justify-content:center;font-size:0}
+  .app-shell aside nav{flex:1;align-items:center;margin:0;padding:0 0 2px;overflow-x:auto;overscroll-behavior-x:contain}
+  .app-shell aside nav button{height:38px;padding:8px 10px;white-space:nowrap}
+  .app-shell aside .admin,.app-shell aside .sidebar-build{display:none}
+  .app-shell>main>header.operational-header{top:58px!important;z-index:70}
+}

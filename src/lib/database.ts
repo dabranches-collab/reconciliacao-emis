@@ -16,7 +16,7 @@ export async function loadBoundaryBalanceSummary(analysisId:string):Promise<Boun
 }
 
 export async function loadUnreconciledAgeCounts(analysisId:string,cutoff:string):Promise<UnreconciledAgeCounts>{
-  const query=await supabase.rpc('get_unreconciled_age_counts',{p_analysis_id:analysisId,p_cutoff:cutoff}).single();
+  const query=await supabase.rpc('get_unreconciled_age_counts',{p_analysis_id:analysisId,p_cutoff:cutoff,p_exclude_opening:true}).single();
   if(query.error)throw query.error;
   const row=query.data as Record<string,unknown>;
   return{all:Number(row.all_count),d0:Number(row.d0_count),upTo1:Number(row.up_to_1_count),upTo2:Number(row.up_to_2_count),atLeast1:Number(row.at_least_1_count),atLeast2:Number(row.at_least_2_count),atLeast3:Number(row.at_least_3_count)};
@@ -65,6 +65,12 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
     amount:value.amount,
   }));
   if(metrics.length){const saved=await supabase.from('daily_metrics').upsert(metrics,{onConflict:'analysis_id,metric_date'});if(saved.error)throw saved.error;}
+  for(let bucket=0;bucket<16;bucket++){
+    const refreshed=await supabase.rpc('refresh_accumulated_reconciliation_bucket',{p_analysis_id:context.analysisId,p_bucket:bucket,p_bucket_count:16});
+    if(refreshed.error)throw refreshed.error;
+  }
+  const rebuiltMetrics=await supabase.rpc('refresh_reconciliation_daily_metrics',{p_analysis_id:context.analysisId});
+  if(rebuiltMetrics.error)throw rebuiltMetrics.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});
@@ -82,7 +88,7 @@ const movementColumns='id,source_row,movement_date,accounting_date,account,amoun
 export type MovementDateRange={from?:string;to?:string};
 export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0,dateRange:MovementDateRange={}){
   if(!statuses.length)return{rows:[] as Movement[],total:0};
-  let builder=supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses);
+  let builder=supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).eq('opening_boundary',false);
   if(dateRange.from)builder=builder.gte('movement_date',dateRange.from);
   if(dateRange.to)builder=builder.lte('movement_date',dateRange.to);
   const query=await builder.order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
