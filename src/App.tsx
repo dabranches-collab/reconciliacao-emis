@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { AnalysisResult } from "./types";
 import { analyzeWorkbook, type AnalysisProgress } from "./lib/excel";
+import { createMultipartSession, uploadFileParts } from "./lib/multipartUpload";
 import { useAuth } from "./AuthGate";
 import { classifyMovement } from "./lib/movementType";
 import HistoryDashboard from "./HistoryDashboard";
@@ -910,6 +911,17 @@ export default function App() {
           const prepared = await preparePersistentImport(file, hash);
           persistence = prepared.context;
           return prepared;
+        },
+        async (source, hash, context) => {
+          const session = await createMultipartSession(source, hash, context.batchId, context.accessToken);
+          await uploadFileParts(source, session, context.accessToken, next => setProgress(previous=>({
+            ...previous,
+            percent:Math.max(previous.percent,1+Math.round(next.percent*.17)),
+            stage:next.percent===100?'Ficheiro guardado e validado · a iniciar leitura':`A guardar o ficheiro com segurança · ${next.completedParts}/${next.totalParts} blocos`,
+            processed:next.completedParts,
+            total:next.totalParts,
+            unit:'blocos',
+          })));
         },
       );
       if (!persistence)
