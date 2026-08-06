@@ -235,3 +235,24 @@ Os ficheiros chamados `Extracto 01 a 03 Julho 2026.xlsx` e
 interrompida. Tinham 21 colunas, sem a coluna auxiliar invertida, mas a última
 coluna, “Informação Complementar do movimento”, já continha `IDTR=...`. É preciso
 determinar se essa coluna é nativa ou resultado de preparação manual.
+
+### 11.5 Originais confirmados e análise de 6 de agosto de 2026
+
+O utilizador confirmou posteriormente que os dois ficheiros na pasta externa
+`EXTRATOS` são exportações não trabalhadas. A análise integral confirmou o
+formato descritivo de 21 colunas, zero fórmulas, IDTR nativo na informação
+complementar, referências alternativas `/26` em `Observações` e `ANL-` nativo.
+
+A continuidade contabilística foi validada em todas as 1 077 723 transições
+comparáveis, sem falhas: saldo anterior + valor original do movimento = saldo
+após o movimento. A coluna auxiliar invertida dos ficheiros preparados não faz
+parte do formato original.
+
+As conclusões, o dicionário de aliases, as métricas e o método variável observado
+nos ficheiros BK estão documentados em
+`docs/ANALISE_EXTRATOS_ORIGINAIS.md`.
+
+O bloqueio deixou de ser a ausência de ficheiros originais. O bloqueio atual é a
+aprovação das regras determinísticas e dos critérios de desempate antes de mudar
+o importador ou a reconciliação. Não implementar nem publicar essas mudanças sem
+essa decisão.
