@@ -135,6 +135,9 @@ A aplicação inclui manifest, service worker e botão de instalação na barra 
 ## 10. Estado funcional resumido
 
 - Importação direta de extratos Real Time.
+- As importações centrais têm estado explícito (`processing`, `completed`, `failed`). Só uma finalização validada pode marcar um lote como concluído.
+- Uma importação interrompida pode ser retomada com o mesmo ficheiro: os movimentos já persistidos são ignorados pela impressão digital e apenas os restantes são inseridos.
+- A tabela de histórico distingue linhas lidas, inseridas e duplicadas; sobreposições entre extratos são esperadas e não criam movimentos repetidos.
 - Deduplicação central de movimentos sobrepostos.
 - Reconciliação automática por IDTR.
 - Reconciliação manual com justificação e auditoria.

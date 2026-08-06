@@ -9,7 +9,7 @@ import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
 import AuditLogPanel from './AuditLogPanel';
 import UserManagement from './UserManagement';
-import { finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
+import { failPersistentImport, finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
 import packageJson from '../package.json';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
@@ -158,7 +158,7 @@ export default function App() {
     if (!file) return;
     setBusy(true); setError(''); setProcessingFile(file.name); setProgress({ percent: 1, stage: 'Ficheiro recebido' }); setView('results');
     let persistence:PersistenceContext|undefined;
-    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })),async hash=>{const prepared=await preparePersistentImport(file,hash);persistence=prepared.context;return prepared;});if(!persistence)throw new Error('Não foi possível preparar a importação central.');setProgress(previous=>({...previous,percent:99,stage:'A finalizar a importação na base central'}));await finalizePersistentImport(analyzed,persistence);const persisted=await loadPersistentResult();setResult(persisted??analyzed);setHistoryRevision((value) => value + 1); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.'); setView('import'); }
+    try { const analyzed = await analyzeWorkbook(file, (next) => setProgress((previous) => ({ ...previous, ...next, liveTotals: next.liveTotals ?? previous.liveTotals, liveMovementTypes: next.liveMovementTypes ?? previous.liveMovementTypes })),async hash=>{const prepared=await preparePersistentImport(file,hash);persistence=prepared.context;return prepared;});if(!persistence)throw new Error('Não foi possível preparar a importação central.');setProgress(previous=>({...previous,percent:99,stage:'A finalizar a importação na base central'}));await finalizePersistentImport(analyzed,persistence);const persisted=await loadPersistentResult();setResult(persisted??analyzed);setHistoryRevision((value) => value + 1); } catch (cause) { const message=cause instanceof Error ? cause.message : 'Não foi possível analisar o ficheiro.';if(persistence)try{await failPersistentImport(persistence,message);}catch{/* Preserva a mensagem original da importação. */}setError(message); setView('import'); }
     finally { setBusy(false); }
   };
   const refreshData=async()=>{if(refreshing)return;setRefreshing(true);setError('');try{const persisted=await loadPersistentResult();if(persisted)setResult(persisted);setHistoryRevision(value=>value+1);}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível atualizar os dados centrais.');}finally{setRefreshing(false);}};

@@ -14,7 +14,7 @@ const timeValue=(value:unknown)=>{const digits=String(value??'').replace(/\D/g,'
 const fingerprint=(values:unknown[])=>{let a=2166136261,b=2246822507;const text=values.map(value=>String(value??'').trim()).join('\u001f');for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b^code,3266489917);}return `${(a>>>0).toString(16).padStart(8,'0')}${(b>>>0).toString(16).padStart(8,'0')}`;};
 async function persistMovements(context:PersistenceContext,rows:Record<string,unknown>[]){
   if(!rows.length)return;
-  const response=await fetch(`${context.url}/rest/v1/movements?on_conflict=analysis_id,fingerprint`,{method:'POST',headers:{apikey:context.key,Authorization:`Bearer ${context.accessToken}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  const response=await fetch(`${context.url}/rest/v1/movements?on_conflict=analysis_id,fingerprint`,{method:'POST',headers:{apikey:context.key,Authorization:`Bearer ${context.accessToken}`,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(rows)});
   if(!response.ok)throw new Error(`Não foi possível guardar os movimentos na base central (${response.status}): ${await response.text()}`);
 }
 

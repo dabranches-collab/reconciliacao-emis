@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw } from 'lucide-react';
 import { loadAuditLogs, type AuditLog } from './lib/database';
 
-const actionLabels:Record<string,string>={login:'Início de sessão',import_started:'Importação iniciada',import_completed:'Importação concluída',export_excel:'Exportação Excel',export_pdf:'Exportação PDF',manual_reconciliation:'Reconciliação manual',user_created:'Utilizador criado',user_updated:'Utilizador atualizado',user_suspended:'Utilizador suspenso',user_reactivated:'Utilizador reativado'};
+const actionLabels:Record<string,string>={login:'Início de sessão',import_started:'Importação iniciada',import_resumed:'Importação retomada',import_completed:'Importação concluída',import_failed:'Importação falhada',export_excel:'Exportação Excel',export_pdf:'Exportação PDF',manual_reconciliation:'Reconciliação manual',user_created:'Utilizador criado',user_updated:'Utilizador atualizado',user_suspended:'Utilizador suspenso',user_reactivated:'Utilizador reativado'};
 
 export default function AuditLogPanel(){
   const [logs,setLogs]=useState<AuditLog[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
