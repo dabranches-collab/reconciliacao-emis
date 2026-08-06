@@ -16,6 +16,11 @@ describe('normalização auditável V2',()=>{
     expect(normalizeMovementRow(raw({accountingDate:20260709,systemDate:20260710})).accountingDate).toBe('2026-07-09');
     expect(normalizeMovementRow(raw({accountingDate:'',systemDate:20260710})).accountingDate).toBe('2026-07-10');
   });
+  it('normaliza MRHORA numérica sem zeros à esquerda',()=>{
+    expect(normalizeMovementRow(raw({systemTime:3})).systemTime).toBe('00:00:03');
+    expect(normalizeMovementRow(raw({systemTime:93005})).systemTime).toBe('09:30:05');
+    expect(normalizeMovementRow(raw({systemTime:'9:30:05'})).systemTime).toBe('09:30:05');
+  });
   it('valida MRVLR contra a evolução de MRSALD por conta',()=>{
     const validator=new BalanceSequenceValidator();
     expect(validator.validate(normalizeMovementRow(raw({amount:100,balance:1100})))).toEqual({valid:true});
