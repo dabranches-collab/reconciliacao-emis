@@ -36,7 +36,7 @@ begin
       )
     ) into v_patch from public.movements where analysis_id=p_analysis_id;
   elsif p_section='movement_types' then
-    with rows as (
+    with type_rows as (
       select case
         when description_normalized like '%comiss%' then 'commission'
         when description_normalized like '%atm%' then 'atm'
@@ -50,21 +50,21 @@ begin
       from public.movements where analysis_id=p_analysis_id group by 1
     ) select jsonb_build_object('movementTypes',coalesce(jsonb_object_agg(movement_type,
       jsonb_build_object('total',total,'reconciled',reconciled,'unreconciled',unreconciled,'missingIdtr',missing)),'{}'::jsonb))
-      into v_patch from rows;
+      into v_patch from type_rows;
   elsif p_section='age' then
-    with cutoff as (select max(coalesce(accounting_date,movement_date)) day from public.movements where analysis_id=p_analysis_id), rows as (
-      select case when c.day-coalesce(m.accounting_date,m.movement_date)=0 then 'D+0'
-        when c.day-coalesce(m.accounting_date,m.movement_date)=1 then 'D+1'
-        when c.day-coalesce(m.accounting_date,m.movement_date)=2 then 'D+2'
-        when c.day-coalesce(m.accounting_date,m.movement_date)=3 then 'D+3'
-        when c.day-coalesce(m.accounting_date,m.movement_date)<=7 then 'D+4–7' else 'D+8+' end bucket,
+    with cutoff as (select max(coalesce(accounting_date,movement_date)) cutoff_date from public.movements where analysis_id=p_analysis_id), age_rows as (
+      select case when c.cutoff_date-coalesce(m.accounting_date,m.movement_date)=0 then 'D+0'
+        when c.cutoff_date-coalesce(m.accounting_date,m.movement_date)=1 then 'D+1'
+        when c.cutoff_date-coalesce(m.accounting_date,m.movement_date)=2 then 'D+2'
+        when c.cutoff_date-coalesce(m.accounting_date,m.movement_date)=3 then 'D+3'
+        when c.cutoff_date-coalesce(m.accounting_date,m.movement_date)<=7 then 'D+4–7' else 'D+8+' end bucket,
         count(*) total,count(*) filter(where status='automatic') automatic,
         count(*) filter(where status in ('unreconciled','missing_idtr')) unreconciled,
         round(coalesce(sum(amount),0)::numeric,2) amount
       from public.movements m cross join cutoff c where m.analysis_id=p_analysis_id group by 1
     ) select jsonb_build_object('ageBuckets',coalesce(jsonb_object_agg(bucket,
       jsonb_build_object('total',total,'automatic',automatic,'unreconciled',unreconciled,'amount',amount)),'{}'::jsonb))
-      into v_patch from rows;
+      into v_patch from age_rows;
   elsif p_section='timing' then
     with delays as (
       select idtr,max(coalesce(accounting_date,movement_date))-min(coalesce(accounting_date,movement_date)) delay
@@ -75,11 +75,11 @@ begin
         'D+2',count(*) filter(where delay=2),'D+3',count(*) filter(where delay=3),
         'D+4+',count(*) filter(where delay>3)))) into v_patch from delays;
   elsif p_section='methods' then
-    with rows as (
+    with method_rows as (
       select reconciliation_method,count(*) movement_count from public.movements
       where analysis_id=p_analysis_id and status='automatic' and reconciliation_method is not null group by reconciliation_method
     ) select jsonb_build_object('reconciliationMethods',coalesce(jsonb_object_agg(reconciliation_method,movement_count),'{}'::jsonb))
-      into v_patch from rows;
+      into v_patch from method_rows;
   elsif p_section='balances' then
     with first_row as (
       select balance-amount opening_balance from public.movements where analysis_id=p_analysis_id
