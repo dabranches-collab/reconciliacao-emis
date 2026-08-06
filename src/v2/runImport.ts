@@ -1,10 +1,22 @@
 import type {AnalysisProgress} from '../lib/excel';
-import {createV2ImportSink,finalizeV2Import,loadV2Dashboard,prepareV2Import} from './database';
+import {createV2ImportSink,finalizeV2Import,loadV2Dashboard,loadV2ImportState,prepareV2Import} from './database';
 import {ingestRows} from './importPipeline';
 import {estimateXlsxRows,streamXlsxRows} from './xlsxRowStream';
 import {resolveExtractHeaders} from './extractSchema';
 
 const sha256=async(buffer:ArrayBuffer)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(value=>value.toString(16).padStart(2,'0')).join('');
+const wait=(milliseconds:number)=>new Promise(resolve=>window.setTimeout(resolve,milliseconds));
+
+async function waitForCentralCompletion(importId:string,onProgress:(progress:AnalysisProgress)=>void){
+  for(let attempt=0;attempt<300;attempt++){
+    const state=await loadV2ImportState(importId);
+    if(state.state==='completed')return;
+    if(state.state==='failed')throw new Error(state.error_message||'A reconciliação central falhou.');
+    onProgress({percent:Math.max(82,Number(state.progress)||82),stage:state.stage||'A reconciliação continua no servidor',processed:state.source_rows,total:state.source_rows,unit:'linhas',storedRows:state.inserted_rows});
+    await wait(2000);
+  }
+  throw new Error('A reconciliação continua no servidor. Consulte o Histórico para acompanhar a conclusão.');
+}
 
 export async function runV2Import(file:File,onProgress:(progress:AnalysisProgress)=>void){
   onProgress({percent:1,stage:'A ler o ficheiro e calcular a assinatura'});
@@ -23,7 +35,12 @@ export async function runV2Import(file:File,onProgress:(progress:AnalysisProgres
     const ingestion=await ingestRows(streamXlsxRows(buffer),sink,1000);
     ({processed,inserted,duplicates,rejected}=ingestion);
     onProgress({percent:82,stage:'Todas as linhas foram guardadas · a reconciliar',processed:ingestion.inserted,total:ingestion.processed,unit:'linhas',storedRows:ingestion.inserted});
-    await finalizeV2Import(prepared.context);
+    try{
+      await finalizeV2Import(prepared.context);
+    }catch{
+      onProgress({percent:88,stage:'A reconciliação continua no servidor · a confirmar conclusão',processed:ingestion.processed,total:ingestion.processed,unit:'linhas',storedRows:ingestion.inserted});
+      await waitForCentralCompletion(prepared.context.importId,onProgress);
+    }
     onProgress({percent:100,stage:'Importação, reconciliação e indicadores concluídos',processed:ingestion.processed,total:ingestion.processed,unit:'linhas',storedRows:ingestion.inserted});
     const dashboard=await loadV2Dashboard(prepared.context.seriesId);
     if(!dashboard||dashboard.state!=='completed'||!dashboard.result)throw new Error('A base terminou o trabalho mas não devolveu indicadores V2 concluídos.');

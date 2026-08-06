@@ -54,6 +54,12 @@ export async function finalizeV2Import(context:V2ImportContext){
   return query.data as Record<string,unknown>;
 }
 
+export async function loadV2ImportState(importId:string){
+  const query=await supabase.from('rt_v2_imports').select('state,stage,progress,error_message,source_rows,inserted_rows').eq('id',importId).single();
+  if(query.error)throw query.error;
+  return query.data as {state:string;stage:string;progress:number;error_message:string|null;source_rows:number;inserted_rows:number};
+}
+
 export async function loadV2Dashboard(seriesId:string):Promise<V2Dashboard|null>{
   const query=await supabase.from('rt_v2_calculations').select('state,rule_version,calculated_at,result,error_message').eq('series_id',seriesId).eq('metric','dashboard').maybeSingle();
   if(query.error)throw query.error;if(!query.data)return null;
