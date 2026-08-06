@@ -902,8 +902,8 @@ export default function App() {
       return;
     }
     let active = true;setCentralLoading(true);
-    const recoverableTask=loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
-    const resultTask=loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
+    const recoverableTask=REALTIME_V2_ACTIVE?Promise.resolve():loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
+    const resultTask=REALTIME_V2_ACTIVE?Promise.resolve():loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
     const v2Task=loadLatestV2Dashboard().then(dashboard=>{if(active&&dashboard)setV2Dashboard(dashboard);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os indicadores V2."));});
     void Promise.allSettled([recoverableTask,resultTask,v2Task]).then(()=>{if(active)setCentralLoading(false);});
     return () => {
@@ -934,7 +934,7 @@ export default function App() {
     }
     if (!file) return;
     if(REALTIME_V2_ACTIVE){
-      setBusy(true);setError("");setProcessingFile(file.name);setProgress({percent:1,stage:"Ficheiro recebido"});setView("results");
+      setResult(null);setBusy(true);setError("");setProcessingFile(file.name);setProgress({percent:1,stage:"Ficheiro recebido"});setView("results");
       try{
         const outcome=await runV2Import(file,next=>setProgress(next));
         if(!outcome.dashboard)throw new Error("A importação terminou sem indicadores V2 disponíveis.");
@@ -1047,8 +1047,7 @@ export default function App() {
     setRefreshing(true);
     setError("");
     try {
-      const persisted = await loadPersistentResult();
-      if (persisted) setResult(persisted);
+      if(!REALTIME_V2_ACTIVE){const persisted = await loadPersistentResult();if (persisted) setResult(persisted);}
       const dashboard=await loadLatestV2Dashboard();
       setV2Dashboard(dashboard);
       setHistoryRevision((value) => value + 1);
