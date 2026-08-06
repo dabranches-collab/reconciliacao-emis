@@ -6,12 +6,20 @@ export type ImportStatus='processing'|'completed'|'failed';
 export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null};
 export type AuditLog={id:number;actor:string;email:string;action:string;entityType:string;details:Record<string,unknown>;createdAt:string};
 export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
+export type UnreconciledAgeCounts={all:number;d0:number;upTo1:number;upTo2:number;atLeast1:number;atLeast2:number;atLeast3:number};
 
 export async function loadBoundaryBalanceSummary(analysisId:string):Promise<BoundaryBalanceSummary>{
   const query=await supabase.rpc('get_boundary_balance_summary',{p_analysis_id:analysisId,p_window_days:2}).single();
   if(query.error)throw query.error;
   const row=query.data as Record<string,unknown>;
   return{totalOpenGroups:Number(row.total_open_groups),totalOpenBalance:Number(row.total_open_balance),openingGroups:Number(row.opening_groups),openingBalance:Number(row.opening_balance),closingGroups:Number(row.closing_groups),closingBalance:Number(row.closing_balance),operationalGroups:Number(row.operational_groups),operationalBalance:Number(row.operational_balance)};
+}
+
+export async function loadUnreconciledAgeCounts(analysisId:string,cutoff:string):Promise<UnreconciledAgeCounts>{
+  const query=await supabase.rpc('get_unreconciled_age_counts',{p_analysis_id:analysisId,p_cutoff:cutoff}).single();
+  if(query.error)throw query.error;
+  const row=query.data as Record<string,unknown>;
+  return{all:Number(row.all_count),d0:Number(row.d0_count),upTo1:Number(row.up_to_1_count),upTo2:Number(row.up_to_2_count),atLeast1:Number(row.at_least_1_count),atLeast2:Number(row.at_least_2_count),atLeast3:Number(row.at_least_3_count)};
 }
 
 export async function preparePersistentImport(file:File,fileHash:string):Promise<{context:PersistenceContext;duplicate:boolean}>{
@@ -71,16 +79,20 @@ export async function failPersistentImport(context:PersistenceContext,message:st
 const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:Number(row.source_row),reportDate:String(row.movement_date??row.accounting_date??''),account:String(row.account??''),amount:Number(row.amount),currency:String(row.currency??'AOA'),operationNumber:String(row.operation_number??''),description:String(row.description??''),complementaryInfo:String(row.complementary_info??''),idtr:row.idtr?String(row.idtr):null,status:row.status as Movement['status']});
 const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
 
-export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0){
+export type MovementDateRange={from?:string;to?:string};
+export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0,dateRange:MovementDateRange={}){
   if(!statuses.length)return{rows:[] as Movement[],total:0};
-  const query=await supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
+  let builder=supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses);
+  if(dateRange.from)builder=builder.gte('movement_date',dateRange.from);
+  if(dateRange.to)builder=builder.lte('movement_date',dateRange.to);
+  const query=await builder.order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
   if(query.error)throw query.error;
   return{rows:(query.data??[]).map(row=>dbMovement(row as Record<string,unknown>)),total:query.count??0};
 }
 
-export async function loadAllMovementsByStatus(analysisId:string,statuses:Movement['status'][],onProgress?:(loaded:number,total:number)=>void){
+export async function loadAllMovementsByStatus(analysisId:string,statuses:Movement['status'][],onProgress?:(loaded:number,total:number)=>void,dateRange:MovementDateRange={}){
   const rows:Movement[]=[];let total=0;
-  for(let offset=0;;offset+=1000){const page=await loadMovementsByStatus(analysisId,statuses,1000,offset);total=page.total;rows.push(...page.rows);onProgress?.(rows.length,total);if(rows.length>=total||!page.rows.length)break;}
+  for(let offset=0;;offset+=1000){const page=await loadMovementsByStatus(analysisId,statuses,1000,offset,dateRange);total=page.total;rows.push(...page.rows);onProgress?.(rows.length,total);if(rows.length>=total||!page.rows.length)break;}
   return rows;
 }
 
