@@ -1,4 +1,4 @@
-const CACHE='reconciliacao-shell-v0.14.9';
+const CACHE='reconciliacao-shell-v0.15.0';
 const SHELL=['/','/manifest.webmanifest','/favicon.svg','/keve-logo-green.png','/keve-logo-purple.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});
