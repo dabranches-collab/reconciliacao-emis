@@ -5,6 +5,14 @@ export type PersistenceContext={url:string;key:string;accessToken:string;analysi
 export type ImportStatus='processing'|'completed'|'failed';
 export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null};
 export type AuditLog={id:number;actor:string;email:string;action:string;entityType:string;details:Record<string,unknown>;createdAt:string};
+export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
+
+export async function loadBoundaryBalanceSummary(analysisId:string):Promise<BoundaryBalanceSummary>{
+  const query=await supabase.rpc('get_boundary_balance_summary',{p_analysis_id:analysisId,p_window_days:2}).single();
+  if(query.error)throw query.error;
+  const row=query.data as Record<string,unknown>;
+  return{totalOpenGroups:Number(row.total_open_groups),totalOpenBalance:Number(row.total_open_balance),openingGroups:Number(row.opening_groups),openingBalance:Number(row.opening_balance),closingGroups:Number(row.closing_groups),closingBalance:Number(row.closing_balance),operationalGroups:Number(row.operational_groups),operationalBalance:Number(row.operational_balance)};
+}
 
 export async function preparePersistentImport(file:File,fileHash:string):Promise<{context:PersistenceContext;duplicate:boolean}>{
   const {data:{session}}=await supabase.auth.getSession();

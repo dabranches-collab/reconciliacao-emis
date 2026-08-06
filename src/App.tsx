@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, Download, FileSpreadsheet, Grid2X2, History, Landmark, Moon, ReceiptText, RefreshCw, ShieldCheck, Sun, Upload, Users, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeftRight, BarChart3, BookOpen, CheckCircle2, CircleEllipsis, Clock3, CreditCard, Download, FileSpreadsheet, Grid2X2, History, Info, Landmark, Moon, ReceiptText, RefreshCw, ShieldCheck, Sun, Upload, Users, Wrench } from 'lucide-react';
 import type { AnalysisResult } from './types';
 import { analyzeWorkbook, type AnalysisProgress } from './lib/excel';
 import { useAuth } from './AuthGate';
@@ -9,7 +9,7 @@ import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
 import AuditLogPanel from './AuditLogPanel';
 import UserManagement from './UserManagement';
-import { failPersistentImport, finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
+import { failPersistentImport, finalizePersistentImport, loadBoundaryBalanceSummary, loadPersistentResult, preparePersistentImport, type BoundaryBalanceSummary, type PersistenceContext } from './lib/database';
 import packageJson from '../package.json';
 
 const money = new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' });
@@ -30,6 +30,9 @@ const movementTypes = [
 ] as const;
 
 function Results({ result }: { result: AnalysisResult }) {
+  const central=result as AnalysisResult&{analysisId?:string};
+  const [excludeBoundaries,setExcludeBoundaries]=useState(true),[boundary,setBoundary]=useState<BoundaryBalanceSummary|null>(null);
+  useEffect(()=>{if(!central.analysisId)return;let active=true;void loadBoundaryBalanceSummary(central.analysisId).then(value=>{if(active)setBoundary(value);});return()=>{active=false};},[central.analysisId]);
   const typeSummaries = useMemo(() => {
     const counts = new Map(movementTypes.map((type) => [type.key, { total: 0, reconciled: 0, unreconciled: 0, missingIdtr: 0 }]));
     if (result.movementTypes) for (const [key, value] of Object.entries(result.movementTypes)) Object.assign(counts.get(key as typeof movementTypes[number]['key'])!, value);
@@ -52,8 +55,9 @@ function Results({ result }: { result: AnalysisResult }) {
       <Metric label="Não reconciliados" value={result.totals.unreconciled.toLocaleString('pt-AO')} tone="warn" />
       <Metric label="Movimentos sem IDTR" value={result.totals.missingIdtr.toLocaleString('pt-AO')} tone="bad" />
     </section>
-    {result.rawAmounts && <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">MONTANTES DO EXTRATO</p><h2>Débitos, créditos e saldo acumulado</h2></div><p>Valores calculados pela coluna monetária com sinal e pelo saldo <code>MRSALD</code>.</p></div><div className="balance-widgets">
+    {result.rawAmounts && <section className="balance-section"><div className="section-heading"><div><p className="eyebrow">MONTANTES E CONTROLO</p><h2>Débitos, créditos e saldos de reconciliação</h2></div>{boundary&&<div className="boundary-toggle-wrap"><button type="button" className={`boundary-toggle ${excludeBoundaries?'active':''}`} aria-pressed={excludeBoundaries} onClick={()=>setExcludeBoundaries(value=>!value)}><Info size={15}/><span>Excluir fronteiras temporais</span><i/></button><div className="boundary-popover" role="tooltip"><strong>Impacto desta opção</strong><p>Nenhum movimento é apagado ou reconciliado. A opção altera apenas o saldo operacional apresentado.</p><dl><div><dt>Fechos com abertura anterior</dt><dd>{boundary.openingGroups.toLocaleString('pt-AO')} · {money.format(boundary.openingBalance)}</dd></div><div><dt>Abertos após a data de corte</dt><dd>{boundary.closingGroups.toLocaleString('pt-AO')} · {money.format(boundary.closingBalance)}</dd></div><div><dt>Diferença operacional interior</dt><dd>{boundary.operationalGroups.toLocaleString('pt-AO')} · {money.format(boundary.operationalBalance)}</dd></div></dl></div></div>}</div><div className="balance-widgets">
       <article><span>Total de débitos</span><strong>{money.format(result.rawAmounts.debits)}</strong><small>Movimentos com sinal negativo</small></article><article><span>Total de créditos</span><strong>{money.format(result.rawAmounts.credits)}</strong><small>Movimentos com sinal positivo</small></article><article><span>Movimento líquido</span><strong>{money.format(result.rawAmounts.net)}</strong><small>Créditos menos débitos</small></article><article><span>Saldo final MRSALD</span><strong>{result.rawAmounts.closingBalance===null?'—':money.format(result.rawAmounts.closingBalance)}</strong><small>Saldo acumulado no fim do extrato</small></article>
+      {boundary&&<article className={Math.abs(excludeBoundaries?boundary.operationalBalance:boundary.totalOpenBalance)<.005?'matched':'mismatch'}><span>Saldo pendente {excludeBoundaries?'operacional':'bruto'}</span><strong>{money.format(excludeBoundaries?boundary.operationalBalance:boundary.totalOpenBalance)}</strong><small>{excludeBoundaries?`${boundary.operationalGroups.toLocaleString('pt-AO')} grupos interiores`:`${boundary.totalOpenGroups.toLocaleString('pt-AO')} grupos abertos, incluindo fronteiras`}</small></article>}
     </div></section>}
     {result.ageBuckets && <section className="aging-section"><div className="section-heading"><div><p className="eyebrow">ENVELHECIMENTO</p><h2>Idade dos movimentos na data de corte</h2></div><p>Idade operacional por <code>MRDTSIS</code>; corte contabilístico por <code>MRDATL</code>.</p></div><div className="aging-grid">{['D+0','D+1','D+2','D+3','D+4–7','D+8+'].map(key=>{const item=result.ageBuckets?.[key]??{total:0,automatic:0,unreconciled:0,amount:0};const rate=item.total?item.automatic/item.total*100:0;return <article key={key}><span>{key}</span><strong>{item.unreconciled.toLocaleString('pt-AO')}</strong><small>pendentes de {item.total.toLocaleString('pt-AO')}</small><div><i style={{width:`${rate}%`}}/></div><b>{rate.toFixed(1)}% reconciliados</b></article>})}</div></section>}
     {result.reconciliationTiming && <section className="timing-section"><div className="section-heading"><div><p className="eyebrow">TEMPO DE RECONCILIAÇÃO</p><h2>Quanto demoraram os grupos IDTR a fechar</h2></div><p>Dias entre o primeiro e o último movimento de cada grupo que fecha a zero.</p></div><div className="timing-widgets"><article className="average"><span>Média</span><strong>{result.reconciliationTiming.averageDays.toFixed(2)}</strong><small>dias por grupo</small></article>{['D+0','D+1','D+2','D+3','D+4+'].map(key=>{const count=result.reconciliationTiming?.buckets[key]??0,rate=result.reconciliationTiming?.totalGroups?count/result.reconciliationTiming.totalGroups*100:0;return <article key={key}><span>{key==='D+0'?'No próprio dia':key==='D+4+'?'Mais de 3 dias':key.replace('+','+ ' )+'dia(s)'}</span><strong>{rate.toFixed(1)}%</strong><small>{count.toLocaleString('pt-AO')} grupos</small></article>})}</div></section>}
