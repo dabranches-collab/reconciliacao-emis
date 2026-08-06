@@ -39,8 +39,10 @@ import {
   finalizePersistentImport,
   loadBoundaryBalanceSummary,
   loadPersistentResult,
+  loadRecoverableImport,
   preparePersistentImport,
   type BoundaryBalanceSummary,
+  type CentralImport,
   type PersistenceContext,
 } from "./lib/database";
 import packageJson from "../package.json";
@@ -816,6 +818,7 @@ export default function App() {
     stage: "A aguardar ficheiro",
   });
   const [processingFile, setProcessingFile] = useState("");
+  const [recoverableImport, setRecoverableImport] = useState<(CentralImport & { analysisId: string }) | null>(null);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
   const [historyRevision, setHistoryRevision] = useState(0);
@@ -870,9 +873,10 @@ export default function App() {
       return;
     }
     let active = true;
-    void loadPersistentResult()
-      .then((persisted) => {
+    void Promise.all([loadPersistentResult(),loadRecoverableImport()])
+      .then(([persisted,recoverable]) => {
         if (active && persisted) setResult(persisted);
+        if (active) setRecoverableImport(recoverable);
       })
       .catch((cause) => {
         if (active)
@@ -932,6 +936,7 @@ export default function App() {
           unit: next.unit,
         })),
       );
+      setRecoverableImport(null);
       const persisted = await loadPersistentResult();
       setResult(persisted ?? analyzed);
       setHistoryRevision((value) => value + 1);
@@ -943,6 +948,7 @@ export default function App() {
       if (persistence)
         try {
           await failPersistentImport(persistence, message);
+          setRecoverableImport(await loadRecoverableImport());
         } catch {
           /* Preserva a mensagem original da importação. */
         }
@@ -1327,6 +1333,19 @@ export default function App() {
               />
             </label>
             <small>Formato aceite: extrato Real Time em XLSX</small>
+            {recoverableImport && (
+              <div className="import-recovery" role="status">
+                <AlertTriangle size={20} />
+                <div>
+                  <strong>Existe uma importação por concluir</strong>
+                  <span>{recoverableImport.filename}</span>
+                  <small>
+                    Fase: {recoverableImport.processingStage ?? "interrompida"} · {recoverableImport.progressPercent ?? 0}% · bloco {Math.max(0,(recoverableImport.processedBucket ?? -1)+1)} de {recoverableImport.totalBuckets ?? 16} concluído.
+                  </small>
+                  <p>Selecione novamente este mesmo ficheiro. As linhas já guardadas serão ignoradas e a reconciliação retomará no bloco seguinte.</p>
+                </div>
+              </div>
+            )}
             {error && <div className="error">{error}</div>}
           </section>
         )}

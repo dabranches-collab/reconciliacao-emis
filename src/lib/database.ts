@@ -9,6 +9,15 @@ export type AuditLog={id:number;actor:string;email:string;action:string;entityTy
 export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
 export type UnreconciledAgeCounts={all:number;d0:number;upTo1:number;upTo2:number;atLeast1:number;atLeast2:number;atLeast3:number};
 
+export async function loadRecoverableImport():Promise<(CentralImport&{analysisId:string})|null>{
+  const analysis=await supabase.from('analyses').select('id').eq('name','Reconciliação Real Time').order('created_at',{ascending:true}).limit(1).maybeSingle();
+  if(analysis.error)throw analysis.error;if(!analysis.data)return null;
+  const query=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysis.data.id).in('status',['processing','failed']).order('uploaded_at',{ascending:false}).limit(1).maybeSingle();
+  if(query.error)throw query.error;if(!query.data)return null;
+  const row=query.data,profile=row.profiles as unknown as {full_name?:string;email?:string}|null;
+  return{id:row.id,analysisId:analysis.data.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16)};
+}
+
 export async function loadBoundaryBalanceSummary(analysisId:string):Promise<BoundaryBalanceSummary>{
   const query=await supabase.rpc('get_boundary_balance_summary',{p_analysis_id:analysisId,p_window_days:2}).single();
   if(query.error)throw query.error;
@@ -91,12 +100,12 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   onProgress?.({percent:98,stage:'A validar saldos e fronteiras contabilísticas',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
   if(refreshedBoundary.error)throw refreshedBoundary.error;
-  const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
+  const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
   const rebuiltSummary=await supabase.rpc('refresh_reconciliation_dashboard_summary',{p_analysis_id:context.analysisId});
   if(rebuiltSummary.error)throw rebuiltSummary.error;
   const completedAt=new Date().toISOString();
-  const completed=await supabase.from('import_batches').update({status:'completed',processing_stage:'completed',progress_percent:100,failure_message:null,completed_at:completedAt}).eq('id',context.batchId);
+  const completed=await supabase.rpc('finalize_import_atomically',{p_analysis_id:context.analysisId,p_batch_id:context.batchId,p_completed_at:completedAt});
   if(completed.error)throw completed.error;
   onProgress?.({percent:100,stage:'Importação, reconciliação e indicadores concluídos',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});

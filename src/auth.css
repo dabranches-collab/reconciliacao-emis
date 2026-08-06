@@ -51,6 +51,7 @@ nav button:disabled { cursor: not-allowed; opacity: .42; background: transparent
 @media(max-width:1300px){.movement-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .app-shell > main > header { position: sticky; top: 0; z-index: 20; margin: -18px -20px 30px; padding: 18px 20px 16px; background: rgba(244,247,246,.94); border-bottom: 1px solid rgba(214,224,221,.9); backdrop-filter: blur(12px); }
 .processing-dashboard { display: grid; gap: 18px; }
+.import-recovery{display:flex;align-items:flex-start;gap:12px;width:min(760px,calc(100% - 28px));margin-top:14px;padding:14px 16px;border:1px solid #e3a936;border-radius:12px;background:#fff7df;color:#684711;text-align:left}.import-recovery>svg{flex:0 0 auto;color:#c07800}.import-recovery div{display:grid;gap:3px}.import-recovery span,.import-recovery small{display:block}.import-recovery p{margin:5px 0 0;font-size:11px;line-height:1.4}
 .processing-hero { display: flex; justify-content: space-between; align-items: center; gap: 18px; background: linear-gradient(120deg,#143c34,#176c56,#168862); background-size: 200% 200%; color: white; border-radius: 18px; padding: 26px 28px; animation: processing-hero 4s ease infinite; }
 .processing-hero h2 { margin: 5px 0 7px; font-size: 23px; }
 .processing-hero p { margin: 0; color: #c6ded7; }
