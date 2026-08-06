@@ -1376,7 +1376,7 @@ export default function App() {
             para a base central
           </div>
         )}
-        <RealTimeOverview revision={historyRevision} result={result} />
+        {!(view === "results" && (busy || v2Dashboard)) && <RealTimeOverview revision={historyRevision} result={result} />}
         {view === "import" && (
           <section
             className={`dropzone compact-dropzone ${dragging ? "dragging" : ""}`}
