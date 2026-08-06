@@ -124,6 +124,10 @@ Sequência normal:
 6. Validar a versão online no browser autenticado.
 7. Confirmar que `git status --short` fica limpo.
 
+A integração GitHub → Cloudflare usa `pnpm build` como comando de build e
+`npx wrangler deploy` como comando de implantação. O `pnpm-workspace.yaml`
+deve manter `packages: ["."]` para ser compatível com o pnpm usado no Workers Builds.
+
 ## 9. PWA
 
 A aplicação inclui manifest, service worker e botão de instalação na barra superior.
