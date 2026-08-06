@@ -49,6 +49,7 @@ import {
 } from "./lib/database";
 import packageJson from "../package.json";
 import { demoResult } from "./demoData";
+import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
 
 const money = new Intl.NumberFormat("pt-AO", {
   style: "currency",
@@ -962,8 +963,12 @@ export default function App() {
       const persisted=await loadPersistentResult();if(persisted)setResult(persisted);
       setHistoryRevision(value=>value+1);
     }catch(cause){
-      const message=readableError(cause,"Não foi possível retomar a reconciliação.");setError(message);
-      setRecoverableImport(await loadRecoverableImport());setView("import");
+      const message=readableError(cause,"Não foi possível retomar a reconciliação.");
+      try{
+        const {data:{session}}=await supabase.auth.getSession();
+        if(session)await failPersistentImport({url:SUPABASE_URL,key:SUPABASE_PUBLISHABLE_KEY,accessToken:session.access_token,analysisId:recoverableImport.analysisId,batchId:recoverableImport.id},message);
+      }catch{/* A mensagem original continua a ser a relevante. */}
+      setError(message);setRecoverableImport(await loadRecoverableImport());setView("import");
     }finally{setBusy(false);}
   };
   const refreshData = async () => {
