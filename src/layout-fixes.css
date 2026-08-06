@@ -1,5 +1,6 @@
 .app-shell{grid-template-columns:250px minmax(0,1fr)}
 .app-shell>main{width:100%;max-width:none;min-width:0}
+.portal-header-actions,.portal-install,.portal-install-hero{display:flex;align-items:center}.portal-header-actions{gap:16px}.portal-install{gap:7px;padding:9px 12px;border:1px solid #cfc5f4;border-radius:9px;background:#f0ecff;color:#3718b4;font-size:11px;font-weight:800;cursor:pointer}.portal-install-hero{gap:10px;margin:18px auto 0;padding:11px 15px;border:0;border-radius:11px;background:#3718b4;color:#fff;text-align:left;cursor:pointer;box-shadow:0 8px 22px rgba(55,24,180,.2)}.portal-install-hero span{display:grid}.portal-install-hero strong{font-size:12px}.portal-install-hero small{margin-top:2px;color:#dcd4ff;font-size:9px}
 html,body,#root{max-width:100%;overflow-x:hidden}.app-shell,.app-shell>main,.rt-overview,.overview-metrics,.metrics,.movement-dashboard,.movement-grid,.balance-section,.balance-widgets,.aging-section,.aging-grid,.timing-section,.timing-widgets,.dropzone{min-width:0;max-width:100%}.overview-metrics article,.metric,.movement-card,.balance-widgets article,.aging-grid article,.timing-widgets article{min-width:0}
 .audit-filters{display:grid;grid-template-columns:minmax(170px,1.2fr) minmax(170px,1fr) minmax(145px,.8fr) minmax(145px,.8fr) auto;gap:10px;align-items:end;padding:16px 22px;background:#f6f9f8;border-bottom:1px solid #e2e9e7}
 .audit-filters label{display:grid;gap:5px;color:#65716e;font-size:10px;font-weight:800}
@@ -50,4 +51,5 @@ html,body,#root{max-width:100%;overflow-x:hidden}.app-shell,.app-shell>main,.rt-
   .section-heading>p{text-align:left}
   .dropzone{min-height:300px;padding:30px 18px}
   .table-wrap{max-width:100%;overflow:auto}
+  .tool-portal>header{height:auto;gap:10px;padding:12px;align-items:flex-start}.portal-header-actions{gap:8px;align-items:flex-end;flex-direction:column}.portal-install{padding:8px 10px}.portal-install-hero{display:flex}
 }
