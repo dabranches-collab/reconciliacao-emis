@@ -913,97 +913,6 @@ export default function DataExplorer({
           <b>{exportProgress.percent}%</b>
         </div>
       )}
-      <div className="data-toolbar">
-        <div>
-          <p className="eyebrow">CONSULTA E EXTRAÇÃO</p>
-          <h2>Movimentos</h2>
-          <p>
-            <strong>{filtered.length.toLocaleString("pt-AO")}</strong> linhas
-            filtradas de{" "}
-            <strong>{movements.length.toLocaleString("pt-AO")}</strong>{" "}
-            carregadas por estado.
-          </p>
-        </div>
-        <div className="data-actions">
-          <label className="data-search">
-            <Search size={15} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Pesquisar em todas as colunas"
-            />
-          </label>
-          <button
-            className="manual-button"
-            disabled={isDemo || !selected.length}
-            title={isDemo ? "Indisponível no modo de demonstração" : undefined}
-            onClick={() => {
-              setManualError("");
-              setManualOpen(true);
-            }}
-          >
-            <CheckCircle2 size={16} />
-            Reconciliar ({selected.length})
-          </button>
-          <details className="column-picker">
-            <summary>
-              <SlidersHorizontal size={15} />
-              Colunas
-            </summary>
-            <div>
-              <nav>
-                <button type="button" onClick={() => setHidden([])}>
-                  Todas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHidden(columns.map((column) => column.key))}
-                >
-                  Limpar
-                </button>
-              </nav>
-              {columns.map((column) => (
-                <label key={column.key}>
-                  <input
-                    type="checkbox"
-                    checked={!hidden.includes(column.key)}
-                    onChange={() =>
-                      setHidden((current) =>
-                        current.includes(column.key)
-                          ? current.filter((key) => key !== column.key)
-                          : [...current, column.key],
-                      )
-                    }
-                  />
-                  {column.label}
-                </label>
-              ))}
-            </div>
-          </details>
-          <button
-            className="secondary-button"
-            onClick={() => setFit((value) => !value)}
-          >
-            Ajustar ao ecrã
-          </button>
-          <button
-            className="export-button excel"
-            disabled={!filtered.length || !!busy}
-            onClick={() => void exportExcel()}
-          >
-            <FileSpreadsheet size={16} />
-            {busy === "excel" ? "A gerar…" : "Excel"}
-          </button>
-          <button
-            className="export-button pdf"
-            disabled={!filtered.length || !!busy}
-            onClick={() => void exportPdf()}
-          >
-            <FileText size={16} />
-            {busy === "pdf" ? "A gerar…" : "PDF"}
-          </button>
-        </div>
-      </div>
       <div className="active-filter-note">
         Vista inicial: apenas operações não reconciliadas. O filtro Estado
         permite selecionar também os reconciliados automaticamente, movimentos
@@ -1088,6 +997,21 @@ export default function DataExplorer({
               ? "Todas carregadas"
               : "Carregar todas as linhas"}
         </button>
+      </div>
+      <div className="data-toolbar table-toolbar">
+        <div>
+          <p className="eyebrow">TABELA E EXPORTAÇÃO</p>
+          <h2>Movimentos</h2>
+          <p><strong>{filtered.length.toLocaleString("pt-AO")}</strong> linhas filtradas de <strong>{movements.length.toLocaleString("pt-AO")}</strong> carregadas.</p>
+        </div>
+        <div className="data-actions">
+          <label className="data-search"><Search size={15}/><input value={search} onChange={(event)=>setSearch(event.target.value)} placeholder="Pesquisar em todas as colunas"/></label>
+          <button className="manual-button" disabled={isDemo||!selected.length} title={isDemo?"Indisponível no modo de demonstração":undefined} onClick={()=>{setManualError("");setManualOpen(true);}}><CheckCircle2 size={16}/>Reconciliar ({selected.length})</button>
+          <details className="column-picker"><summary><SlidersHorizontal size={15}/>Colunas</summary><div><nav><button type="button" onClick={()=>setHidden([])}>Todas</button><button type="button" onClick={()=>setHidden(columns.map((column)=>column.key))}>Limpar</button></nav>{columns.map((column)=><label key={column.key}><input type="checkbox" checked={!hidden.includes(column.key)} onChange={()=>setHidden((current)=>current.includes(column.key)?current.filter((key)=>key!==column.key):[...current,column.key])}/>{column.label}</label>)}</div></details>
+          <button className="secondary-button" onClick={()=>setFit((value)=>!value)}>Ajustar ao ecrã</button>
+          <button className="export-button excel" disabled={!filtered.length||!!busy} onClick={()=>void exportExcel()}><FileSpreadsheet size={16}/>{busy==="excel"?"A gerar…":"Excel"}</button>
+          <button className="export-button pdf" disabled={!filtered.length||!!busy} onClick={()=>void exportPdf()}><FileText size={16}/>{busy==="pdf"?"A gerar…":"PDF"}</button>
+        </div>
       </div>
       <div className="table-wrap">
         <table>
