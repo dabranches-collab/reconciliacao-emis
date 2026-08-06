@@ -19,6 +19,14 @@
 .metric.manual { border-top: 3px solid #5874d8; }
 .badge.manual { background: #e8edff; color: #3d55aa; }
 .nav-import { margin-top: 14px; border-top: 1px solid #2b4a45; border-radius: 0 0 9px 9px; padding-top: 16px; }
+.app-shell aside nav .nav-submenu{min-height:34px;margin-left:28px;padding:7px 10px;font-size:9px;opacity:.9}
+.app-shell aside nav .nav-logout{margin-top:8px;padding-top:14px;border-top:1px solid #2b4a45;border-radius:0 0 9px 9px;color:#ffd9dd}
+.app-shell aside nav .nav-logout svg{transform:scaleX(-1)}
+.app-shell aside nav button{transition:background-color .16s ease,color .16s ease,transform .16s ease,box-shadow .16s ease}
+.app-shell aside nav button:not(:disabled):hover{transform:translateX(3px);box-shadow:inset 3px 0 0 #58d0a3}
+.app-shell aside nav .nav-submenu:not(:disabled):hover{opacity:1;background:rgba(0,223,160,.2)}
+.app-shell aside nav .nav-logout:not(:disabled):hover{background:rgba(218,88,88,.2);color:#fff;box-shadow:inset 3px 0 0 #ff7883}
+.v2-reference-placeholder{padding:24px}.v2-reference-placeholder h2{margin:4px 0 8px}.v2-reference-placeholder>p:last-child{max-width:760px;color:#61706b}
 nav button:disabled { cursor: not-allowed; opacity: .42; background: transparent; }
 .import-recovery .primary-button{justify-self:start;margin-top:8px}
 .movement-dashboard { margin: 28px 0; }

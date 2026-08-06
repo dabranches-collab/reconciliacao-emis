@@ -54,6 +54,7 @@ import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase
 import { runV2Import } from "./v2/runImport";
 import { loadLatestV2Dashboard } from "./v2/database";
 import V2History from "./v2/V2History";
+import V2Movements from "./v2/V2Movements";
 import V2Results from "./v2/V2Results";
 import type { V2Dashboard } from "./v2/database";
 
@@ -349,7 +350,7 @@ function Results({ result }: { result: AnalysisResult }) {
               <h2>Idade dos movimentos na data de corte</h2>
             </div>
             <p>
-              Idade em dias úteis pelo período contabilístico <code>MRDATL</code>;
+              Idade pelo período contabilístico do movimento;
               fins de semana não aumentam o D+.
             </p>
           </div>
@@ -820,6 +821,8 @@ export default function App() {
     | "results"
     | "movements"
     | "guide"
+    | "assumptions"
+    | "movement-guide"
     | "history"
     | "users"
     | "audit";
@@ -833,6 +836,8 @@ export default function App() {
       saved === "results" ||
       saved === "movements" ||
       saved === "guide" ||
+      saved === "assumptions" ||
+      saved === "movement-guide" ||
       saved === "history" ||
       saved === "users" ||
       saved === "audit"
@@ -1084,6 +1089,10 @@ export default function App() {
           ? "Consulta e extração de movimentos"
           : view === "guide"
             ? "Como funciona"
+            : view === "assumptions"
+              ? "Pressupostos da reconciliação"
+              : view === "movement-guide"
+                ? "Instruções dos movimentos"
             : view === "history"
               ? "Histórico de análises"
               : view === "users"
@@ -1098,6 +1107,10 @@ export default function App() {
           ? "Filtre, ordene e extraia os movimentos disponíveis em Excel ou PDF."
           : view === "guide"
             ? "Compreenda o ciclo, as regras e o impacto da data escolhida."
+            : view === "assumptions"
+              ? "Consulte as regras contabilísticas e os critérios aplicados pelo motor."
+              : view === "movement-guide"
+                ? "Consulte como pesquisar, filtrar, carregar e exportar movimentos."
             : view === "history"
               ? "Consulte os carregamentos e resultados anteriores."
               : view === "users"
@@ -1250,6 +1263,12 @@ export default function App() {
             Como funciona
           </button>
           <button
+            className={`nav-submenu ${view === "assumptions" ? "active" : ""}`}
+            onClick={() => setView("assumptions")}
+          >
+            Pressupostos
+          </button>
+          <button
             className={view === "results" ? "active" : ""}
             title="Abrir o último dashboard de resultados"
             onClick={() => setView("results")}
@@ -1263,6 +1282,12 @@ export default function App() {
           >
             <FileSpreadsheet size={19} />
             Movimentos
+          </button>
+          <button
+            className={`nav-submenu ${view === "movement-guide" ? "active" : ""}`}
+            onClick={() => setView("movement-guide")}
+          >
+            Instruções
           </button>
           <button
             className={view === "history" ? "active" : ""}
@@ -1297,6 +1322,10 @@ export default function App() {
           >
             <Upload size={19} />
             Importar ficheiro
+          </button>
+          <button className="nav-logout" type="button" onClick={() => void identity.signOut()}>
+            <LogOut size={19} />
+            Terminar sessão
           </button>
         </nav>
         <div className="admin" title={identity.email}>
@@ -1351,9 +1380,6 @@ export default function App() {
               onClick={() => void refreshData()}
             >
               <RefreshCw size={18} className={refreshing ? "spinning" : ""} />
-            </button>
-            <button type="button" title="Terminar sessão" aria-label="Terminar sessão" onClick={() => void identity.signOut()}>
-              <LogOut size={18} />
             </button>
             <button
               type="button"
@@ -1446,10 +1472,22 @@ export default function App() {
           />
         )}
         {view === "guide" && <Guide />}
-        {view === "history" && (REALTIME_V2_ACTIVE?<V2History/>:<HistoryDashboard result={result} />)}
-        {view === "movements" && (
-          <DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />
+        {view === "assumptions" && (
+          <section className="panel v2-reference-placeholder">
+            <p className="eyebrow">DOCUMENTAÇÃO OPERACIONAL</p>
+            <h2>Pressupostos da reconciliação</h2>
+            <p>Este menu fica permanentemente disponível. O detalhe gráfico das regras V2 será preenchido a partir da mesma configuração usada pelo motor, para não divergir do cálculo executado.</p>
+          </section>
         )}
+        {view === "movement-guide" && (
+          <section className="panel v2-reference-placeholder">
+            <p className="eyebrow">AJUDA À OPERAÇÃO</p>
+            <h2>Instruções dos movimentos</h2>
+            <p>Este menu fica permanentemente disponível. Reunirá os filtros, prazos D+, carregamento progressivo e exportação da tabela com indicações visuais simples.</p>
+          </section>
+        )}
+        {view === "history" && (REALTIME_V2_ACTIVE?<V2History/>:<HistoryDashboard result={result} />)}
+        {view === "movements" && (REALTIME_V2_ACTIVE?<V2Movements/>:<DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />)}
         {view === "users" && identity.canManageUsers && <UserManagement />}
         {view === "audit" && identity.canViewAudit && <AuditLogPanel />}
       </main>
