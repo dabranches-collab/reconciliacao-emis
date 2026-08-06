@@ -52,6 +52,7 @@ import packageJson from "../package.json";
 import { demoResult } from "./demoData";
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
 import { runV2Import } from "./v2/runImport";
+import { loadLatestV2Dashboard } from "./v2/database";
 import V2Results from "./v2/V2Results";
 import type { V2Dashboard } from "./v2/database";
 
@@ -903,7 +904,8 @@ export default function App() {
     let active = true;setCentralLoading(true);
     const recoverableTask=loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
     const resultTask=loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
-    void Promise.allSettled([recoverableTask,resultTask]).then(()=>{if(active)setCentralLoading(false);});
+    const v2Task=loadLatestV2Dashboard().then(dashboard=>{if(active&&dashboard)setV2Dashboard(dashboard);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os indicadores V2."));});
+    void Promise.allSettled([recoverableTask,resultTask,v2Task]).then(()=>{if(active)setCentralLoading(false);});
     return () => {
       active = false;
     };
@@ -1047,6 +1049,8 @@ export default function App() {
     try {
       const persisted = await loadPersistentResult();
       if (persisted) setResult(persisted);
+      const dashboard=await loadLatestV2Dashboard();
+      setV2Dashboard(dashboard);
       setHistoryRevision((value) => value + 1);
     } catch (cause) {
       setError(
