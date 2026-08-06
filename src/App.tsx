@@ -902,6 +902,7 @@ export default function App() {
     setProgress({ percent: 1, stage: "Ficheiro recebido" });
     setView("results");
     let persistence: PersistenceContext | undefined;
+    let importFinalized = false;
     try {
       const analyzed = await analyzeWorkbook(
         file,
@@ -936,6 +937,7 @@ export default function App() {
           unit: next.unit,
         })),
       );
+      importFinalized = true;
       setRecoverableImport(null);
       const persisted = await loadPersistentResult();
       setResult(persisted ?? analyzed);
@@ -945,15 +947,19 @@ export default function App() {
         cause instanceof Error
           ? cause.message
           : "Não foi possível analisar o ficheiro.";
-      if (persistence)
+      if (persistence && !importFinalized)
         try {
           await failPersistentImport(persistence, message);
           setRecoverableImport(await loadRecoverableImport());
         } catch {
           /* Preserva a mensagem original da importação. */
         }
-      setError(message);
-      setView("import");
+      setError(
+        importFinalized
+          ? `A importação foi concluída, mas não foi possível atualizar o ecrã: ${message}. Utilize o botão Atualizar.`
+          : message,
+      );
+      setView(importFinalized ? "results" : "import");
     } finally {
       setBusy(false);
     }
