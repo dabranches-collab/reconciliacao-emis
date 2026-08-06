@@ -256,3 +256,23 @@ O bloqueio deixou de ser a ausência de ficheiros originais. O bloqueio atual é
 aprovação das regras determinísticas e dos critérios de desempate antes de mudar
 o importador ou a reconciliação. Não implementar nem publicar essas mudanças sem
 essa decisão.
+
+## 12. Estado V2 e backlog após 7 de agosto de 2026
+
+A versão `2.0.8` está publicada. A base contém 2.469.775 movimentos, dos quais
+2.215.734 reconciliados, 254.041 em aberto e 7 anomalias de sequência de saldo.
+A finalização incremental e o índice de consulta dos movimentos foram aplicados
+no Supabase. O próximo extrato deve ser usado prioritariamente para medir o tempo
+real da nova finalização; não misturar este teste com novas alterações visuais.
+
+Backlog funcional e visual, a retomar depois do teste de desempenho:
+
+- mostrar saldo dos movimentos em aberto com fronteira inicial incluída,
+  impacto da fronteira e saldo ajustado sem fronteira;
+- tornar o cartão das 7 anomalias clicável, com data, operação, MRVLR, MRSALD
+  recebido e saldo esperado;
+- completar os conteúdos de Pressupostos e Instruções;
+- concluir gestão de utilizadores, níveis administrativos e log central;
+- auditar filtros, carregamento integral e exportações Excel/PDF;
+- rever responsividade e tema escuro em todos os menus;
+- validar instalação e navegação PWA em iPhone e Windows.
