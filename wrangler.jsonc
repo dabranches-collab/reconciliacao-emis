@@ -15,6 +15,13 @@
       "bucket_name": "reconciliacao-emis-imports"
     }
   ],
+  "workflows": [
+    {
+      "name": "reconciliacao-emis-import-finalization",
+      "binding": "IMPORT_FINALIZATION",
+      "class_name": "ImportFinalizationWorkflow"
+    }
+  ],
   "vars": {
     "SUPABASE_URL": "https://sxvhsqlaonrxuuehlcwt.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zZh1YjCo-fSiccuCtAeNPA_h4OHipYw"
