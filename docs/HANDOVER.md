@@ -153,3 +153,85 @@ A aplicação inclui manifest, service worker e botão de instalação na barra 
 - PWA instalável.
 - A entrada em cada ferramenta deve abrir por defeito o respetivo dashboard de Resultados, e não o ecrã de importação.
 - STC reservado para desenvolvimento futuro com ficheiros e regras próprios.
+
+## 11. Bloqueio atual: formato real dos extratos
+
+**Não alterar nem publicar a lógica de importação/reconciliação antes de receber e
+validar uma exportação comprovadamente original do sistema.** Os ficheiros usados
+até agora podem ter sido preparados manualmente e não são uma fonte normativa do
+formato de entrada.
+
+O utilizador está a aguardar novos ficheiros e continuará o trabalho noutro
+computador. Quando os receber, deve confirmar a proveniência antes de os usar:
+
+- exportação direta do sistema, sem abrir e voltar a guardar no Excel;
+- sem colunas, fórmulas, macros, descrições ou identificadores acrescentados;
+- o nome do ficheiro nunca deve determinar datas, período ou regras;
+- cabeçalhos, datas e período devem ser descobertos exclusivamente pelo conteúdo.
+
+### 11.1 Pressupostos errados encontrados no importador atual
+
+`src/lib/rawExtractParser.ts` depende atualmente de posições fixas do formato
+preparado:
+
+- `row[9]` como valor assinado, correspondente a uma coluna sem cabeçalho com
+  fórmula semelhante a `=-MRVLR`;
+- `row[21]` como informação complementar/IDTR, correspondente ao cabeçalho
+  técnico `GBMRINFC` nos ficheiros preparados;
+- `MRDTSIS` é usado em partes do fluxo como data principal, embora o trabalho
+  contabilístico deva ter como base o período/data contabilística de lançamento.
+
+Um importador corrigido deverá localizar colunas por cabeçalhos normalizados,
+nunca por posições, e não deverá exigir colunas auxiliares. O valor nativo é
+`MRVLR`; uma inversão de sinal, se realmente necessária, deve ser calculada pela
+aplicação. Somar `MRVLR` ou `-MRVLR` produz o mesmo teste de fecho a zero, mas os
+dois conceitos não devem ser confundidos com o efeito contabilístico no saldo.
+
+### 11.2 Datas e validação contabilística a implementar
+
+- A data/período contabilístico de lançamento deve ser o eixo principal de
+  períodos, saldos, dashboards, reconciliação e idade das pendências.
+- A data de sistema deve ser preservada separadamente para rastreabilidade, não
+  usada como substituto silencioso da data contabilística.
+- O período real de cada ficheiro deve ser obtido pelos mínimos e máximos das
+  datas contabilísticas válidas encontradas nas linhas.
+- A relação entre `MRVLR` e `MRSALD` deve ser validada por movimentos consecutivos
+  da mesma conta, tolerando apenas limites de conta/período e linhas técnicas
+  comprovadas.
+- Se o ficheiro não satisfizer as invariantes contabilísticas, a importação deve
+  falhar de forma explícita em vez de produzir resultados parciais silenciosos.
+
+### 11.3 IDTR e reconciliação secundária
+
+A proveniência do IDTR ainda não está definitivamente estabelecida. Alguns
+ficheiros preparados apresentam `IDTR=...` na informação complementar, mas o
+utilizador suspeita que também possam ter sido alterados. Não fabricar IDTR nem
+copiar regras desses ficheiros até comparar com uma exportação original.
+
+Regras candidatas, a validar nos originais:
+
+1. IDTR: mesmo identificador, pelo menos dois movimentos e soma contabilística
+   exatamente igual a zero. Ter apenas o mesmo IDTR não basta.
+2. Sobre o saldo residual: mesmo número de operação, descrição normalizada,
+   mesmo valor absoluto e sinais opostos. Emparelhar movimentos individualmente;
+   não fechar um lote inteiro apenas porque a soma agregada deu zero.
+3. Guardar o método (`idtr`, `operation_description` ou `manual`) e uma chave de
+   reconciliação própria. Nunca escrever uma chave técnica como se fosse um IDTR
+   proveniente do sistema.
+4. Preservar sempre os valores e descrições originais, mantendo normalizações em
+   campos derivados e auditáveis.
+
+### 11.4 Evidência anterior, apenas exploratória
+
+Nos três ficheiros preparados de 8 a 28 de julho foram analisados 2.522.257
+movimentos. O fecho por IDTR/soma zero cobriu 2.365.126 linhas. No saldo residual,
+operação + descrição + valores opostos encontrou 26.688 linhas; ao ignorar o
+prefixo manual aparente `ANL-`, encontrou 49.622. Estes números demonstram que há
+uma segunda forma plausível de reconciliação, mas **não devem ser usados como
+verdade funcional** enquanto os originais não forem validados.
+
+Os ficheiros chamados `Extracto 01 a 03 Julho 2026.xlsx` e
+`Extracto 06 a 08 Julho 2026.xlsx` também ficaram sob suspeita e a análise foi
+interrompida. Tinham 21 colunas, sem a coluna auxiliar invertida, mas a última
+coluna, “Informação Complementar do movimento”, já continha `IDTR=...`. É preciso
+determinar se essa coluna é nativa ou resultado de preparação manual.
