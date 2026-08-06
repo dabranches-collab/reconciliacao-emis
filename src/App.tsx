@@ -182,11 +182,15 @@ function Results({ result }: { result: AnalysisResult }) {
           label="Total movimentos"
           value={result.totals.movements.toLocaleString("pt-AO")}
         />
-        <Metric
-          label="Reconciliados automaticamente por IDTR"
-          value={result.totals.automatic.toLocaleString("pt-AO")}
-          tone="good"
-        />
+        <article className="metric good method-metric">
+          <span>Reconciliados automaticamente</span>
+          <strong>{result.totals.automatic.toLocaleString("pt-AO")}</strong>
+          <div className="method-breakdown">
+            <small><b>{(result.reconciliationMethods?.idtr ?? result.totals.automatic).toLocaleString("pt-AO")}</b> IDTR nativo</small>
+            <small><b>{(result.reconciliationMethods?.observation_reference ?? 0).toLocaleString("pt-AO")}</b> referência /26 associada</small>
+            <small><b>{(result.reconciliationMethods?.operation_description ?? 0).toLocaleString("pt-AO")}</b> operação + descrição + valor</small>
+          </div>
+        </article>
         <Metric
           label="Não reconciliados"
           value={result.totals.unreconciled.toLocaleString("pt-AO")}

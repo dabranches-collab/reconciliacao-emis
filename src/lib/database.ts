@@ -77,6 +77,8 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   if(refreshedBoundary.error)throw refreshedBoundary.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
+  const rebuiltSummary=await supabase.rpc('refresh_reconciliation_dashboard_summary',{p_analysis_id:context.analysisId});
+  if(rebuiltSummary.error)throw rebuiltSummary.error;
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});
 }
 
