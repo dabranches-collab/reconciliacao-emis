@@ -18,6 +18,7 @@ import {
   type MovementDateRange,
   type UnreconciledAgeCounts,
 } from "./lib/database";
+import { operationalDaysBetween, shiftOperationalDay } from "./lib/operationalDays";
 
 type ColumnKey =
   | "row"
@@ -72,33 +73,21 @@ const compareMovements = (left: Movement, right: Movement, key: ColumnKey) => {
 };
 const ageInDays = (movement: Movement, cutoff?: string) => {
   if (!cutoff || !movement.reportDate) return null;
-  return Math.max(
-    0,
-    Math.round(
-      (new Date(`${cutoff}T12:00:00`).getTime() -
-        new Date(`${movement.reportDate}T12:00:00`).getTime()) /
-        86400000,
-    ),
-  );
+  return operationalDaysBetween(movement.reportDate, cutoff);
 };
 const safeName = (value: string) =>
   value.replace(/[^a-z0-9_-]+/gi, "_").replace(/^_+|_+$/g, "");
-const shiftDate = (value: string, days: number) => {
-  const date = new Date(`${value}T12:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-};
 const rangeForAge = (
   age: "all" | "d0" | "upTo1" | "upTo2" | "atLeast1" | "atLeast2" | "atLeast3",
   cutoff?: string,
 ): MovementDateRange => {
   if (!cutoff || age === "all") return {};
   if (age === "d0") return { from: cutoff, to: cutoff };
-  if (age === "upTo1") return { from: shiftDate(cutoff, -1), to: cutoff };
-  if (age === "upTo2") return { from: shiftDate(cutoff, -2), to: cutoff };
-  if (age === "atLeast1") return { to: shiftDate(cutoff, -1) };
-  if (age === "atLeast2") return { to: shiftDate(cutoff, -2) };
-  return { to: shiftDate(cutoff, -3) };
+  if (age === "upTo1") return { from: shiftOperationalDay(cutoff, -1), to: cutoff };
+  if (age === "upTo2") return { from: shiftOperationalDay(cutoff, -2), to: cutoff };
+  if (age === "atLeast1") return { to: shiftOperationalDay(cutoff, -1) };
+  if (age === "atLeast2") return { to: shiftOperationalDay(cutoff, -2) };
+  return { to: shiftOperationalDay(cutoff, -3) };
 };
 
 function download(blob: Blob, name: string) {

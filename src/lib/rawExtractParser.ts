@@ -3,6 +3,7 @@ import { normalizeIdtr } from './reconciliation';
 import { classifyMovement, type MovementTypeKey } from './movementType';
 import type { AnalysisProgress } from './excel';
 import type { PersistenceContext } from './database';
+import { operationalDaysBetween } from './operationalDays';
 
 type ZipEntry = { name:string; method:number; compressedSize:number; offset:number };
 type TypeTotals = { total:number; reconciled:number; unreconciled:number; missingIdtr:number };
@@ -87,7 +88,7 @@ export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onPro
   if(header<0) throw new Error('Não foram encontrados todos os cabeçalhos obrigatórios do extrato Real Time.');
   if(balanceErrors)throw new Error(`A sequência contabilística contém ${balanceErrors.toLocaleString('pt-AO')} inconsistência(s) entre o valor e o saldo.`);
   const timingBuckets:Record<string,number>={'D+0':0,'D+1':0,'D+2':0,'D+3':0,'D+4+':0}; let timingDays=0,timingGroups=0;
-  for(const [sum,min,max] of groups.values()) if(sum===0){const delay=Math.max(0,max-min);timingGroups++;timingDays+=delay;timingBuckets[delay===0?'D+0':delay===1?'D+1':delay===2?'D+2':delay===3?'D+3':'D+4+']++;}
+  for(const [sum,min,max] of groups.values()) if(sum===0){const delay=operationalDaysBetween(new Date(min*86400000).toISOString().slice(0,10),new Date(max*86400000).toISOString().slice(0,10));timingGroups++;timingDays+=delay;timingBuckets[delay===0?'D+0':delay===1?'D+1':delay===2?'D+2':delay===3?'D+3':'D+4+']++;}
   const reportDate=maxAccounting||maxSystem, samples:Movement[]=[], sampleCounts:Record<ReconciliationStatus,number>={automatic:0,manual:0,unreconciled:0,missing_idtr:0,data_error:0};
   const totals={movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amountCents:0}; let debitCents=0,creditCents=0; const ageBuckets:Record<string,{total:number;automatic:number;unreconciled:number;amount:number}>={};
   const dailyCents:Record<string,{movements:number;automatic:number;unreconciled:number;missingIdtr:number;amount:number}>={};
@@ -95,7 +96,7 @@ export async function analyzeRawExtract(fileName:string,buffer:ArrayBuffer,onPro
   await scanRows(buffer,sheet,shared,async(row,n)=>{
     if(n<=header) return; const c=columns!,signed=Number(row[c.value]); if(!Number.isFinite(signed)) return; processed++;
     const complementary=String(row[c.complementary]??''),observations=String(row[c.observations]??''),idtr=normalizeIdtr(complementary), status:ReconciliationStatus=!idtr?'missing_idtr':groups.get(idtr)?.[0]===0?'automatic':'unreconciled';
-    const systemDate=iso(row[c.systemDate]),accounting=iso(row[c.accountingDate])||systemDate,age=accounting&&reportDate?Math.max(0,Math.round((Date.parse(reportDate)-Date.parse(accounting))/86400000)):0; const bucket=age===0?'D+0':age===1?'D+1':age===2?'D+2':age===3?'D+3':age<=7?'D+4–7':'D+8+';
+    const systemDate=iso(row[c.systemDate]),accounting=iso(row[c.accountingDate])||systemDate,age=accounting&&reportDate?operationalDaysBetween(accounting,reportDate):0; const bucket=age===0?'D+0':age===1?'D+1':age===2?'D+2':age===3?'D+3':age<=7?'D+4–7':'D+8+';
     const b=ageBuckets[bucket]??={total:0,automatic:0,unreconciled:0,amount:0};b.total++;b.amount+=signed;if(status==='automatic')b.automatic++;else b.unreconciled++;
     totals.movements++;totals.amountCents+=Math.round(signed*100);if(signed<0)debitCents+=Math.abs(Math.round(signed*100));else creditCents+=Math.round(signed*100);if(status==='automatic')totals.automatic++;else if(status==='missing_idtr')totals.missingIdtr++;else totals.unreconciled++;
     if(accounting){const day=dailyCents[accounting]??={movements:0,automatic:0,unreconciled:0,missingIdtr:0,amount:0};day.movements++;day.amount+=Math.round(signed*100);if(status==='automatic')day.automatic++;else if(status==='missing_idtr')day.missingIdtr++;else day.unreconciled++;}

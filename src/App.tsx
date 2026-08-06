@@ -343,8 +343,8 @@ function Results({ result }: { result: AnalysisResult }) {
               <h2>Idade dos movimentos na data de corte</h2>
             </div>
             <p>
-              Idade operacional por <code>MRDTSIS</code>; corte contabilístico
-              por <code>MRDATL</code>.
+              Idade em dias úteis pelo período contabilístico <code>MRDATL</code>;
+              fins de semana não aumentam o D+.
             </p>
           </div>
           <div className="aging-grid">
@@ -381,8 +381,8 @@ function Results({ result }: { result: AnalysisResult }) {
               <h2>Quanto demoraram os grupos IDTR a fechar</h2>
             </div>
             <p>
-              Dias entre o primeiro e o último movimento de cada grupo que fecha
-              a zero.
+              Dias úteis entre o primeiro e o último movimento de cada grupo que
+              fecha a zero.
             </p>
           </div>
           <div className="timing-widgets">
@@ -391,7 +391,7 @@ function Results({ result }: { result: AnalysisResult }) {
               <strong>
                 {result.reconciliationTiming.averageDays.toFixed(2)}
               </strong>
-              <small>dias por grupo</small>
+              <small>dias úteis por grupo</small>
             </article>
             {["D+0", "D+1", "D+2", "D+3", "D+4+"].map((key) => {
               const count = result.reconciliationTiming?.buckets[key] ?? 0,
