@@ -137,14 +137,27 @@ export async function resumePersistentFinalization(item:CentralImport&{analysisI
   const {data:{session}}=await supabase.auth.getSession();
   if(!session)throw new Error('A sessão terminou. Entre novamente antes de retomar.');
   if(item.movementCount<=0||item.insertedCount+item.duplicateCount!==item.movementCount)throw new Error('Esta importação ainda não tem todas as linhas guardadas. Selecione novamente o ficheiro original.');
-  const analysis=await supabase.from('analyses').select('result_summary').eq('id',item.analysisId).single();
-  if(analysis.error)throw analysis.error;
-  const previous=(analysis.data.result_summary??{}) as Partial<AnalysisResult>;
-  const result:AnalysisResult={sourceMode:'raw_extract',sourceFilename:item.filename,reportDate:item.reportDate??previous.reportDate??'',periodStart:previous.periodStart,accountingBalance:previous.accountingBalance??null,movements:[],groups:[],totals:{movements:item.movementCount,automatic:0,manual:0,unreconciled:item.movementCount,missingIdtr:0,amount:0}};
-  const context:PersistenceContext={url:SUPABASE_URL,key:SUPABASE_PUBLISHABLE_KEY,accessToken:session.access_token,analysisId:item.analysisId,batchId:item.id};
-  const resumed=await supabase.from('import_batches').update({status:'processing',failure_message:null,error_count:0,completed_at:null}).eq('id',item.id);if(resumed.error)throw resumed.error;
-  await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_finalization_resumed',entity_type:'import_batch',entity_id:item.id,analysis_id:item.analysisId,details:{filename:item.filename}});
-  return finalizePersistentImport(result,context,onProgress);
+  const headers={Authorization:`Bearer ${session.access_token}`};
+  const started=await fetch(`/api/imports/${encodeURIComponent(item.id)}/finalize`,{method:'POST',headers});
+  if(!started.ok)throw new Error(`Não foi possível iniciar o processamento durável (${started.status}).`);
+  onProgress?.({percent:99,stage:'Cálculos protegidos iniciados no servidor',processed:0,total:6,unit:'blocos'});
+  const deadline=Date.now()+30*60*1000;
+  while(Date.now()<deadline){
+    await new Promise(resolve=>setTimeout(resolve,2500));
+    const response=await fetch(`/api/imports/${encodeURIComponent(item.id)}/finalize`,{headers});
+    if(!response.ok)throw new Error(`Não foi possível acompanhar o processamento (${response.status}).`);
+    const payload=await response.json() as {status?:{status?:string;error?:{message?:string}}};
+    const workflowStatus=payload.status?.status;
+    const batch=await supabase.from('import_batches').select('status,validation_summary,failure_message').eq('id',item.id).single();
+    if(batch.error)throw batch.error;
+    const validation=(batch.data.validation_summary??{}) as {dashboardSectionsCompleted?:number;dashboardSectionsTotal?:number};
+    const completed=Math.max(0,Number(validation.dashboardSectionsCompleted??0));
+    const total=Math.max(6,Number(validation.dashboardSectionsTotal??6));
+    onProgress?.({percent:workflowStatus==='complete'?100:99,stage:workflowStatus==='complete'?'Importação, reconciliação e indicadores concluídos':`A calcular indicadores no servidor · etapa ${Math.min(total,completed+1)} de ${total}`,processed:completed,total,unit:'blocos'});
+    if(workflowStatus==='complete'||batch.data.status==='completed')return;
+    if(workflowStatus==='errored'||workflowStatus==='terminated')throw new Error(payload.status?.error?.message||batch.data.failure_message||'O processamento durável foi interrompido. Pode retomá-lo sem repetir linhas.');
+  }
+  throw new Error('O processamento continua no servidor, mas excedeu o tempo de acompanhamento deste ecrã. Utilize Atualizar para consultar o estado.');
 }
 
 export async function failPersistentImport(context:PersistenceContext,message:string){
@@ -183,7 +196,15 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
   const latest=await supabase.from('analyses').select('id,result_summary').eq('name','Reconciliação Real Time').eq('status','completed').order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(latest.error)throw latest.error;if(!latest.data)return null;
   const analysisId=latest.data.id;
-  const summary=latest.data.result_summary as AnalysisResult;
+  const stored=(latest.data.result_summary??{}) as Partial<AnalysisResult>;
+  const storedTiming=stored.reconciliationTiming;
+  const summary:AnalysisResult={
+    reportDate:stored.reportDate??'',accountingBalance:stored.accountingBalance??null,
+    movements:Array.isArray(stored.movements)?stored.movements:[],groups:Array.isArray(stored.groups)?stored.groups:[],
+    totals:stored.totals??{movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amount:0},
+    ...stored,
+    reconciliationTiming:storedTiming&&Number.isFinite(Number(storedTiming.averageDays))?storedTiming:undefined,
+  };
   const metricsQuery=await supabase.from('daily_metrics').select('metric_date,movements,automatic,unreconciled,missing_idtr,amount').eq('analysis_id',analysisId).order('metric_date',{ascending:true});
   if(metricsQuery.error)throw metricsQuery.error;
   const dailyMetrics:NonNullable<AnalysisResult['dailyMetrics']>=Object.fromEntries((metricsQuery.data??[]).map(row=>[row.metric_date,{movements:row.movements,automatic:row.automatic,unreconciled:row.unreconciled,missingIdtr:row.missing_idtr,amount:Number(row.amount)}]));

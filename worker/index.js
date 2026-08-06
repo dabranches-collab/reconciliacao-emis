@@ -118,6 +118,11 @@ async function api(request,env,url){
     return json({batchId,objectKey:object.key,size:object.size,etag:object.etag,status:'uploaded'});
   }
   const finalizeMatch=url.pathname.match(/^\/api\/imports\/([^/]+)\/finalize$/);
+  if(request.method==='GET'&&finalizeMatch){
+    const batchId=decodeURIComponent(finalizeMatch[1]),batch=await batchForUser(env,authorization,batchId,user.id);
+    const instance=await env.IMPORT_FINALIZATION.get(`import-${batch.id}`);
+    return json({batchId:batch.id,status:await instance.status()});
+  }
   if(request.method==='POST'&&finalizeMatch){
     const batchId=decodeURIComponent(finalizeMatch[1]),batch=await batchForUser(env,authorization,batchId,user.id);
     const instanceId=`import-${batch.id}`;let instance;

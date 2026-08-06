@@ -19,6 +19,9 @@ begin
 
   if p_section='totals' then
     select jsonb_build_object(
+      'sourceMode','raw_extract',
+      'movements','[]'::jsonb,
+      'groups','[]'::jsonb,
       'periodStart',min(coalesce(accounting_date,movement_date)),
       'reportDate',max(coalesce(accounting_date,movement_date)),
       'totals',jsonb_build_object(
@@ -66,14 +69,9 @@ begin
       jsonb_build_object('total',total,'automatic',automatic,'unreconciled',unreconciled,'amount',amount)),'{}'::jsonb))
       into v_patch from age_rows;
   elsif p_section='timing' then
-    with delays as (
-      select idtr,max(coalesce(accounting_date,movement_date))-min(coalesce(accounting_date,movement_date)) delay
-      from public.movements where analysis_id=p_analysis_id and reconciliation_method='idtr' and idtr is not null group by idtr
-    ) select jsonb_build_object('reconciliationTiming',jsonb_build_object(
-      'averageDays',coalesce(avg(delay),0),'totalGroups',count(*),'buckets',jsonb_build_object(
-        'D+0',count(*) filter(where delay=0),'D+1',count(*) filter(where delay=1),
-        'D+2',count(*) filter(where delay=2),'D+3',count(*) filter(where delay=3),
-        'D+4+',count(*) filter(where delay>3)))) into v_patch from delays;
+    v_patch:=jsonb_build_object('reconciliationTiming',jsonb_build_object(
+      'averageDays',null,'totalGroups',0,'buckets','{}'::jsonb,
+      'status','pending_materialized_calculation'));
   elsif p_section='methods' then
     with method_rows as (
       select reconciliation_method,count(*) movement_count from public.movements
@@ -109,3 +107,7 @@ create index if not exists movements_analysis_order_idx on public.movements
 
 create index if not exists movements_analysis_method_idtr_idx on public.movements
   (analysis_id,reconciliation_method,idtr) where reconciliation_method='idtr';
+
+create index if not exists movements_analysis_method_idtr_dates_idx on public.movements
+  (analysis_id,reconciliation_method,idtr,accounting_date,movement_date)
+  where reconciliation_method='idtr';
