@@ -8,6 +8,7 @@ import HistoryDashboard from './HistoryDashboard';
 import RealTimeOverview from './RealTimeOverview';
 import DataExplorer from './DataExplorer';
 import AuditLogPanel from './AuditLogPanel';
+import UserManagement from './UserManagement';
 import { finalizePersistentImport, loadPersistentResult, preparePersistentImport, type PersistenceContext } from './lib/database';
 import packageJson from '../package.json';
 
@@ -178,7 +179,7 @@ export default function App() {
       {view === 'guide' && <Guide/>}
       {view === 'history' && <HistoryDashboard result={result}/>}
       {view === 'movements' && <DataExplorer result={result} onImport={() => setView('import')}/>}
-      {view === 'users' && identity.isAdmin && <section className="panel empty-state"><Users size={28}/><h2>Gestão reservada ao administrador</h2><p>A criação e edição de utilizadores será ligada ao Supabase neste ecrã.</p></section>}
+      {view === 'users' && identity.isAdmin && <UserManagement/>}
       {view === 'audit' && identity.isAdmin && <AuditLogPanel/>}
     </main>
   </div>;
