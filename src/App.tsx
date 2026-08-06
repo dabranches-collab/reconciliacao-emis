@@ -875,19 +875,8 @@ export default function App() {
       return;
     }
     let active = true;
-    void Promise.all([loadPersistentResult(),loadRecoverableImport()])
-      .then(([persisted,recoverable]) => {
-        if (active && persisted) setResult(persisted);
-        if (active) setRecoverableImport(recoverable);
-      })
-      .catch((cause) => {
-        if (active)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Não foi possível carregar os dados centrais.",
-          );
-      });
+    void loadRecoverableImport().then(recoverable=>{if(active)setRecoverableImport(recoverable);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível verificar importações interrompidas."));});
+    void loadPersistentResult().then(persisted=>{if(active&&persisted)setResult(persisted);}).catch(cause=>{if(active)setError(readableError(cause,"Não foi possível carregar os dados centrais."));});
     return () => {
       active = false;
     };

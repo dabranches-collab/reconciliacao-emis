@@ -178,12 +178,12 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
   const consolidatedTotals=Object.values(dailyMetrics).reduce<AnalysisResult['totals']>((totals,day)=>({movements:totals.movements+day.movements,automatic:totals.automatic+day.automatic,manual:totals.manual,unreconciled:totals.unreconciled+day.unreconciled,missingIdtr:totals.missingIdtr+day.missingIdtr,amount:totals.amount+day.amount}),{movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amount:0});
   const metricDates=Object.keys(dailyMetrics).sort();
   const initialStates:Movement['status'][]=['unreconciled'];if(consolidatedTotals.missingIdtr>0)initialStates.push('missing_idtr');
-  const movementPreview=await loadMovementsByStatus(analysisId,initialStates);
+  const movementPreview=await loadMovementsByStatus(analysisId,initialStates,1000,0,{},false);
   const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
   if(batches.error)throw batches.error;
   const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16)};});
   const lastBatch=importHistory.find(item=>item.status==='completed');
-  return{...summary,periodStart:metricDates[0]??summary.periodStart,reportDate:metricDates.at(-1)??summary.reportDate,totals:consolidatedTotals,dailyMetrics,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.total,importHistory,movements:movementPreview.rows};
+  return{...summary,periodStart:metricDates[0]??summary.periodStart,reportDate:metricDates.at(-1)??summary.reportDate,totals:consolidatedTotals,dailyMetrics,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.rows.length,importHistory,movements:movementPreview.rows};
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
