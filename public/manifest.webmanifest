@@ -1,10 +1,13 @@
 {
   "name": "Reconciliação Real Time",
   "short_name": "Reconciliação",
+  "id": "/",
   "description": "Plataforma operacional de reconciliação Real Time",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
+  "categories": ["finance", "business", "productivity"],
   "background_color": "#f4f7f6",
   "theme_color": "#3718b4",
   "lang": "pt",

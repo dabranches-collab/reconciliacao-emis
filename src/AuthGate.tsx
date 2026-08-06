@@ -4,8 +4,8 @@ import { LockKeyhole } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { logPlatformAccess } from './lib/database';
 
-type Identity = { name: string; email: string; role: 'administrator' | 'analyst' | 'auditor'; isAdmin: boolean };
-const demoIdentity: Identity = { name: 'Diogo Abranches', email: 'dabranches@gmail.com', role: 'administrator', isAdmin: true };
+type Identity = { name: string; email: string; role: 'platform_owner' | 'client_admin' | 'analyst' | 'auditor'; isAdmin: boolean; isPlatformOwner: boolean; canManageUsers: boolean; canViewAudit: boolean };
+const demoIdentity: Identity = { name: 'Diogo Abranches', email: 'dabranches@gmail.com', role: 'platform_owner', isAdmin: true, isPlatformOwner: true, canManageUsers: true, canViewAudit: true };
 const AuthContext = createContext<Identity>(demoIdentity);
 export const useAuth = () => useContext(AuthContext);
 
@@ -25,9 +25,10 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       const { data: profile } = await client.from('profiles').select('full_name,email,role,is_active').eq('id', nextSession.user.id).maybeSingle();
       if(profile&&!profile.is_active){await client.auth.signOut();setError('Esta conta encontra-se suspensa.');return;}
       const email = profile?.email ?? nextSession.user.email ?? '';
-      const role = profile?.role ?? (email.toLowerCase() === 'dabranches@gmail.com' ? 'administrator' : 'analyst');
+      const role = profile?.role ?? (email.toLowerCase() === 'dabranches@gmail.com' ? 'platform_owner' : 'analyst');
       const name = profile?.full_name || nextSession.user.user_metadata.full_name || (email.toLowerCase() === 'dabranches@gmail.com' ? 'Diogo Abranches' : email.split('@')[0]);
-      setIdentity({ name, email, role, isAdmin: role === 'administrator' });
+      const isPlatformOwner=role==='platform_owner',canManageUsers=isPlatformOwner||role==='client_admin';
+      setIdentity({ name, email, role, isAdmin: canManageUsers, isPlatformOwner, canManageUsers, canViewAudit: isPlatformOwner });
     };
     void client.auth.getSession().then(async ({ data }) => { await loadIdentity(data.session); setLoading(false); });
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => { void loadIdentity(nextSession); });
