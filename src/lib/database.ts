@@ -73,6 +73,8 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
 
+export async function logPlatformAction(action:string,entityType:string,details:Record<string,unknown>={}){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action,entity_type:entityType,details});}
+
 export async function loadAuditLogs(limit=1000):Promise<AuditLog[]>{
   const query=await supabase.from('audit_logs').select('id,action,entity_type,details,created_at,profiles!audit_logs_actor_id_fkey(full_name,email)').order('created_at',{ascending:false}).limit(limit);
   if(query.error)throw query.error;
