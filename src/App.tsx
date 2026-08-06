@@ -520,17 +520,17 @@ function ProcessingDashboard({
   const ingestionComplete = progress.percent >= 82;
   const liveMetrics = progress.liveV2
     ? [
-        { label: "Processados", value: (progress.processed ?? 0).toLocaleString("pt-AO"), done: ingestionComplete },
-        { label: "Reconciliados", value: progress.percent >= 100 ? "Concluído" : "A calcular", done: progress.percent >= 100 },
-        { label: "Com IDTR", value: progress.liveV2.withNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete },
-        { label: "Sem IDTR ( /26)", value: progress.liveV2.withoutNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete },
-        { label: "Saldo líquido", value: money.format(progress.liveV2.amountCents / 100), done: ingestionComplete, compact: true },
+        { label: "Processados", value: (progress.processed ?? 0).toLocaleString("pt-AO"), done: ingestionComplete, tone: "total" },
+        { label: "Reconciliados · provisório", value: progress.percent >= 100 ? "Concluído" : progress.liveV2.provisionalReconciled.toLocaleString("pt-AO"), done: progress.percent >= 100, tone: "good" },
+        { label: "Com IDTR", value: progress.liveV2.withNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete, tone: "idtr" },
+        { label: "Sem IDTR ( /26)", value: progress.liveV2.withoutNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete, tone: "warn" },
+        { label: "Saldo líquido", value: money.format(progress.liveV2.amountCents / 100), done: ingestionComplete, compact: true, tone: "balance" },
       ]
     : [
-        { label: "Total movimentos", value: progress.liveTotals?.movements?.toLocaleString("pt-AO"), done: ingestionComplete, compact: false },
-        { label: "Reconciliados por IDTR", value: progress.liveTotals?.automatic?.toLocaleString("pt-AO"), done: progress.percent >= 100, compact: false },
-        { label: "Não reconciliados", value: progress.liveTotals?.unreconciled?.toLocaleString("pt-AO"), done: progress.percent >= 100, compact: false },
-        { label: "Sem IDTR", value: progress.liveTotals?.missingIdtr?.toLocaleString("pt-AO"), done: ingestionComplete, compact: false },
+        { label: "Total movimentos", value: progress.liveTotals?.movements?.toLocaleString("pt-AO"), done: ingestionComplete, compact: false, tone: "total" },
+        { label: "Reconciliados por IDTR", value: progress.liveTotals?.automatic?.toLocaleString("pt-AO"), done: progress.percent >= 100, compact: false, tone: "good" },
+        { label: "Não reconciliados", value: progress.liveTotals?.unreconciled?.toLocaleString("pt-AO"), done: progress.percent >= 100, compact: false, tone: "warn" },
+        { label: "Sem IDTR", value: progress.liveTotals?.missingIdtr?.toLocaleString("pt-AO"), done: ingestionComplete, compact: false, tone: "balance" },
       ];
   return (
     <section className="processing-dashboard" aria-live="polite">
@@ -609,9 +609,9 @@ function ProcessingDashboard({
         ))}
       </div>
       <div className="processing-metrics">
-        {liveMetrics.map(({label, value, done, compact}) => (
+        {liveMetrics.map(({label, value, done, compact, tone}) => (
           <article
-            className={value !== undefined ? `counting ${done ? "metric-done" : ""} ${compact ? "metric-compact" : ""}` : ""}
+            className={`${tone} ${value !== undefined ? `counting ${done ? "metric-done" : ""} ${compact ? "metric-compact" : ""}` : ""}`}
             key={label}
           >
             <span>{label}</span>

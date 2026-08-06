@@ -46,11 +46,11 @@ export async function runV2Import(file:File,onProgress:(progress:AnalysisProgres
   if(!headerValidated)throw new Error('Não foi encontrado um conjunto completo e inequívoco de cabeçalhos Real Time. Nenhuma importação foi criada.');
   const prepared=await prepareV2Import(file,hash);
   if(prepared.duplicate){const dashboard=await loadV2Dashboard(prepared.context.seriesId);return {dashboard,duplicate:true,context:prepared.context};}
-  let lastLiveV2:LiveV2={withNativeIdtr:0,withoutNativeIdtr:0,reference26:0,amountCents:0,duplicates:0,rejected:0};
+  let lastLiveV2:LiveV2={withNativeIdtr:0,withoutNativeIdtr:0,reference26:0,amountCents:0,duplicates:0,rejected:0,provisionalReconciled:0};
   const sink=createV2ImportSink(prepared.context,value=>{
-    lastLiveV2={withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected};
+    lastLiveV2={withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected,provisionalReconciled:value.provisionalReconciled};
     const ratio=value.processed/estimatedRows,percent=value.stage==='validating'?3:value.stage==='ingesting'?Math.min(78,5+Math.round(ratio*73)):value.stage==='reconciling'?82:value.stage==='failed'?0:100;
-    onProgress({percent,stage:value.message,processed:value.processed,total:estimatedRows,unit:'linhas',storedRows:value.inserted,liveTotals:{movements:value.processed,automatic:0,unreconciled:value.processed,missingIdtr:value.withoutNativeIdtr},liveV2:{withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected}});
+    onProgress({percent,stage:value.message,processed:value.processed,total:estimatedRows,unit:'linhas',storedRows:value.inserted,liveTotals:{movements:value.processed,automatic:value.provisionalReconciled,unreconciled:Math.max(0,value.processed-value.provisionalReconciled),missingIdtr:value.withoutNativeIdtr},liveV2:{withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected,provisionalReconciled:value.provisionalReconciled}});
   });
   let processed=0,inserted=0,duplicates=0,rejected=0;
   try{

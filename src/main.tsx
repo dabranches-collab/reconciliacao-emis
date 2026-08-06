@@ -7,4 +7,4 @@ import './auth.css';
 import './keve-theme.css';
 import './layout-fixes.css';
 createRoot(document.getElementById('root')!).render(<StrictMode><AuthGate><App /></AuthGate></StrictMode>);
-if('serviceWorker'in navigator)window.addEventListener('load',()=>{void navigator.serviceWorker.register('/sw-v2.0.7.js',{updateViaCache:'none'});});
+if('serviceWorker'in navigator)window.addEventListener('load',()=>{void navigator.serviceWorker.register('/sw-v2.0.8.js',{updateViaCache:'none'});});
