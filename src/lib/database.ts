@@ -15,8 +15,8 @@ export async function loadBoundaryBalanceSummary(analysisId:string):Promise<Boun
   return{totalOpenGroups:Number(row.total_open_groups),totalOpenBalance:Number(row.total_open_balance),openingGroups:Number(row.opening_groups),openingBalance:Number(row.opening_balance),closingGroups:Number(row.closing_groups),closingBalance:Number(row.closing_balance),operationalGroups:Number(row.operational_groups),operationalBalance:Number(row.operational_balance)};
 }
 
-export async function loadUnreconciledAgeCounts(analysisId:string,cutoff:string):Promise<UnreconciledAgeCounts>{
-  const query=await supabase.rpc('get_unreconciled_age_counts',{p_analysis_id:analysisId,p_cutoff:cutoff,p_exclude_opening:true}).single();
+export async function loadUnreconciledAgeCounts(analysisId:string,cutoff:string,excludeOpening=true):Promise<UnreconciledAgeCounts>{
+  const query=await supabase.rpc('get_unreconciled_age_counts',{p_analysis_id:analysisId,p_cutoff:cutoff,p_exclude_opening:excludeOpening}).single();
   if(query.error)throw query.error;
   const row=query.data as Record<string,unknown>;
   return{all:Number(row.all_count),d0:Number(row.d0_count),upTo1:Number(row.up_to_1_count),upTo2:Number(row.up_to_2_count),atLeast1:Number(row.at_least_1_count),atLeast2:Number(row.at_least_2_count),atLeast3:Number(row.at_least_3_count)};
@@ -71,6 +71,8 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   }
   const rebuiltMetrics=await supabase.rpc('refresh_reconciliation_daily_metrics',{p_analysis_id:context.analysisId});
   if(rebuiltMetrics.error)throw rebuiltMetrics.error;
+  const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
+  if(refreshedBoundary.error)throw refreshedBoundary.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});
@@ -85,10 +87,11 @@ export async function failPersistentImport(context:PersistenceContext,message:st
 const dbMovement=(row:Record<string,unknown>):Movement=>({id:String(row.id),row:Number(row.source_row),reportDate:String(row.movement_date??row.accounting_date??''),account:String(row.account??''),amount:Number(row.amount),currency:String(row.currency??'AOA'),operationNumber:String(row.operation_number??''),description:String(row.description??''),complementaryInfo:String(row.complementary_info??''),idtr:row.idtr?String(row.idtr):null,status:row.status as Movement['status']});
 const movementColumns='id,source_row,movement_date,accounting_date,account,amount,currency,operation_number,description,complementary_info,idtr,status';
 
-export type MovementDateRange={from?:string;to?:string};
-export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0,dateRange:MovementDateRange={}){
+export type MovementDateRange={from?:string;to?:string;excludeOpening?:boolean};
+export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0,dateRange:MovementDateRange={},withCount=true){
   if(!statuses.length)return{rows:[] as Movement[],total:0};
-  let builder=supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).eq('opening_boundary',false);
+  let builder=supabase.from('movements').select(movementColumns,withCount?{count:'exact'}:{}).eq('analysis_id',analysisId).in('status',statuses);
+  if(dateRange.excludeOpening!==false)builder=builder.eq('opening_boundary',false);
   if(dateRange.from)builder=builder.gte('movement_date',dateRange.from);
   if(dateRange.to)builder=builder.lte('movement_date',dateRange.to);
   const query=await builder.order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
@@ -97,9 +100,14 @@ export async function loadMovementsByStatus(analysisId:string,statuses:Movement[
 }
 
 export async function loadAllMovementsByStatus(analysisId:string,statuses:Movement['status'][],onProgress?:(loaded:number,total:number)=>void,dateRange:MovementDateRange={}){
-  const rows:Movement[]=[];let total=0;
-  for(let offset=0;;offset+=1000){const page=await loadMovementsByStatus(analysisId,statuses,1000,offset,dateRange);total=page.total;rows.push(...page.rows);onProgress?.(rows.length,total);if(rows.length>=total||!page.rows.length)break;}
-  return rows;
+  const pageSize=1000,first=await loadMovementsByStatus(analysisId,statuses,pageSize,0,dateRange,true),total=first.total;
+  if(total<=first.rows.length){onProgress?.(first.rows.length,total);return first.rows;}
+  const pages:Movement[][]=Array(Math.ceil(total/pageSize));pages[0]=first.rows;
+  const offsets=Array.from({length:pages.length-1},(_,index)=>(index+1)*pageSize);
+  let cursor=0,loaded=first.rows.length;onProgress?.(loaded,total);
+  const worker=async()=>{for(;;){const index=cursor++;if(index>=offsets.length)return;const offset=offsets[index];const page=await loadMovementsByStatus(analysisId,statuses,pageSize,offset,dateRange,false);pages[index+1]=page.rows;loaded+=page.rows.length;onProgress?.(loaded,total);}};
+  await Promise.all(Array.from({length:Math.min(6,offsets.length)},()=>worker()));
+  return pages.flat();
 }
 
 export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId:string;lastUploadedAt?:string;uploadedBy?:string;movementTotal?:number;importHistory:CentralImport[]})|null>{

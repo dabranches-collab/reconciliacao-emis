@@ -1,73 +1,1205 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, ChevronDown, FileSpreadsheet, FileText, Search, SlidersHorizontal, X } from 'lucide-react';
-import type { AnalysisResult, Movement } from './types';
-import { loadAllMovementsByStatus, loadMovementsByStatus, loadUnreconciledAgeCounts, logPlatformAction, reconcileMovementsManually, type MovementDateRange, type UnreconciledAgeCounts } from './lib/database';
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  FileSpreadsheet,
+  FileText,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import type { AnalysisResult, Movement } from "./types";
+import {
+  loadAllMovementsByStatus,
+  loadMovementsByStatus,
+  loadUnreconciledAgeCounts,
+  logPlatformAction,
+  reconcileMovementsManually,
+  type MovementDateRange,
+  type UnreconciledAgeCounts,
+} from "./lib/database";
 
-type ColumnKey='row'|'reportDate'|'account'|'operationNumber'|'idtr'|'description'|'complementaryInfo'|'amount'|'currency'|'status';
-type Sort={key:ColumnKey;direction:'asc'|'desc'};
-const statusLabels:Record<Movement['status'],string>={automatic:'Reconciliado automaticamente',manual:'Reconciliado manualmente',unreconciled:'Não reconciliado',missing_idtr:'Sem IDTR',data_error:'Erro de dados'};
-const columns:{key:ColumnKey;label:string;defaultVisible:boolean}[]=[
-  {key:'row',label:'Linha',defaultVisible:true},{key:'reportDate',label:'Data',defaultVisible:true},{key:'account',label:'Conta',defaultVisible:false},{key:'operationNumber',label:'N.º operação',defaultVisible:true},{key:'idtr',label:'IDTR',defaultVisible:true},{key:'description',label:'Descrição',defaultVisible:true},{key:'complementaryInfo',label:'Informação complementar',defaultVisible:false},{key:'amount',label:'Valor',defaultVisible:true},{key:'currency',label:'Moeda',defaultVisible:false},{key:'status',label:'Estado',defaultVisible:true},
-];
-const valueOf=(movement:Movement,key:ColumnKey)=>key==='status'?statusLabels[movement.status]:String(movement[key]??'—');
-const compareMovements=(left:Movement,right:Movement,key:ColumnKey)=>{
-  if(key==='row'||key==='amount')return Number(left[key]??0)-Number(right[key]??0);
-  if(key==='reportDate')return String(left.reportDate??'').localeCompare(String(right.reportDate??''));
-  return valueOf(left,key).localeCompare(valueOf(right,key),'pt',{numeric:true,sensitivity:'base'});
+type ColumnKey =
+  | "row"
+  | "reportDate"
+  | "account"
+  | "operationNumber"
+  | "idtr"
+  | "description"
+  | "complementaryInfo"
+  | "amount"
+  | "currency"
+  | "status";
+type Sort = { key: ColumnKey; direction: "asc" | "desc" };
+const statusLabels: Record<Movement["status"], string> = {
+  automatic: "Reconciliado automaticamente",
+  manual: "Reconciliado manualmente",
+  unreconciled: "Não reconciliado",
+  missing_idtr: "Sem IDTR",
+  data_error: "Erro de dados",
 };
-const ageInDays=(movement:Movement,cutoff?:string)=>{if(!cutoff||!movement.reportDate)return null;return Math.max(0,Math.round((new Date(`${cutoff}T12:00:00`).getTime()-new Date(`${movement.reportDate}T12:00:00`).getTime())/86400000));};
-const safeName=(value:string)=>value.replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'');
-const shiftDate=(value:string,days:number)=>{const date=new Date(`${value}T12:00:00`);date.setDate(date.getDate()+days);return date.toISOString().slice(0,10);};
-const rangeForAge=(age:'all'|'d0'|'upTo1'|'upTo2'|'atLeast1'|'atLeast2'|'atLeast3',cutoff?:string):MovementDateRange=>{if(!cutoff||age==='all')return{};if(age==='d0')return{from:cutoff,to:cutoff};if(age==='upTo1')return{from:shiftDate(cutoff,-1),to:cutoff};if(age==='upTo2')return{from:shiftDate(cutoff,-2),to:cutoff};if(age==='atLeast1')return{to:shiftDate(cutoff,-1)};if(age==='atLeast2')return{to:shiftDate(cutoff,-2)};return{to:shiftDate(cutoff,-3)};};
+const columns: { key: ColumnKey; label: string; defaultVisible: boolean }[] = [
+  { key: "row", label: "Linha", defaultVisible: true },
+  { key: "reportDate", label: "Data", defaultVisible: true },
+  { key: "account", label: "Conta", defaultVisible: false },
+  { key: "operationNumber", label: "N.º operação", defaultVisible: true },
+  { key: "idtr", label: "IDTR", defaultVisible: true },
+  { key: "description", label: "Descrição", defaultVisible: true },
+  {
+    key: "complementaryInfo",
+    label: "Informação complementar",
+    defaultVisible: false,
+  },
+  { key: "amount", label: "Valor", defaultVisible: true },
+  { key: "currency", label: "Moeda", defaultVisible: false },
+  { key: "status", label: "Estado", defaultVisible: true },
+];
+const valueOf = (movement: Movement, key: ColumnKey) =>
+  key === "status"
+    ? statusLabels[movement.status]
+    : String(movement[key] ?? "—");
+const compareMovements = (left: Movement, right: Movement, key: ColumnKey) => {
+  if (key === "row" || key === "amount")
+    return Number(left[key] ?? 0) - Number(right[key] ?? 0);
+  if (key === "reportDate")
+    return String(left.reportDate ?? "").localeCompare(
+      String(right.reportDate ?? ""),
+    );
+  return valueOf(left, key).localeCompare(valueOf(right, key), "pt", {
+    numeric: true,
+    sensitivity: "base",
+  });
+};
+const ageInDays = (movement: Movement, cutoff?: string) => {
+  if (!cutoff || !movement.reportDate) return null;
+  return Math.max(
+    0,
+    Math.round(
+      (new Date(`${cutoff}T12:00:00`).getTime() -
+        new Date(`${movement.reportDate}T12:00:00`).getTime()) /
+        86400000,
+    ),
+  );
+};
+const safeName = (value: string) =>
+  value.replace(/[^a-z0-9_-]+/gi, "_").replace(/^_+|_+$/g, "");
+const shiftDate = (value: string, days: number) => {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+const rangeForAge = (
+  age: "all" | "d0" | "upTo1" | "upTo2" | "atLeast1" | "atLeast2" | "atLeast3",
+  cutoff?: string,
+): MovementDateRange => {
+  if (!cutoff || age === "all") return {};
+  if (age === "d0") return { from: cutoff, to: cutoff };
+  if (age === "upTo1") return { from: shiftDate(cutoff, -1), to: cutoff };
+  if (age === "upTo2") return { from: shiftDate(cutoff, -2), to: cutoff };
+  if (age === "atLeast1") return { to: shiftDate(cutoff, -1) };
+  if (age === "atLeast2") return { to: shiftDate(cutoff, -2) };
+  return { to: shiftDate(cutoff, -3) };
+};
 
-function download(blob:Blob,name:string){const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-
-function ColumnFilter({column,values,selected,onChange}:{column:typeof columns[number];values:string[];selected:string[];onChange:(values:string[])=>void}){
-  const [query,setQuery]=useState(''); const shown=values.filter(value=>value.toLocaleLowerCase('pt').includes(query.toLocaleLowerCase('pt')));
-  if(column.key==='reportDate'){
-    const included=values.filter(value=>!selected.includes(value));
-    const chosen=selected.length>0&&included.length===1?included[0]:'';
-    return <details className="column-filter date-filter"><summary title="Filtrar Data"><ChevronDown size={12}/></summary><div><strong>Filtrar Data</strong><label><span>Selecionar dia</span><input type="date" value={chosen} min={values.at(0)??''} max={values.at(-1)??''} onChange={event=>onChange(event.target.value?values.filter(value=>value!==event.target.value):[])}/></label><nav><button type="button" onClick={()=>onChange([])}>Mostrar todos</button></nav></div></details>;
-  }
-  return <details className="column-filter"><summary title={`Filtrar ${column.label}`}><ChevronDown size={12}/></summary><div><strong>Filtrar {column.label}</strong><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Procurar valor…"/><nav><button type="button" onClick={()=>onChange([])}>Todos</button><button type="button" onClick={()=>onChange(values)}>Limpar</button></nav><section>{shown.map(value=><label key={value}><input type="checkbox" checked={!selected.includes(value)} onChange={()=>onChange(selected.includes(value)?selected.filter(item=>item!==value):[...selected,value])}/><span>{value}</span></label>)}</section></div></details>;
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob),
+    anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function DataExplorer({result,onImport}:{result:AnalysisResult|null;onImport:()=>void}){
-  const [hidden,setHidden]=useState<ColumnKey[]>(columns.filter(column=>!column.defaultVisible).map(column=>column.key));
-  const [excluded,setExcluded]=useState<Partial<Record<ColumnKey,string[]>>>({status:['Reconciliado automaticamente','Reconciliado manualmente','Sem IDTR','Erro de dados']});
-  const [search,setSearch]=useState(''); const [sort,setSort]=useState<Sort>({key:'reportDate',direction:'desc'}); const [fit,setFit]=useState(true); const [busy,setBusy]=useState('');
-  const [ageQuick,setAgeQuick]=useState<'all'|'d0'|'upTo1'|'upTo2'|'atLeast1'|'atLeast2'|'atLeast3'>('all');
-  const [exportProgress,setExportProgress]=useState({percent:0,stage:'',processed:0});
-  const [selected,setSelected]=useState<string[]>([]),[manualOpen,setManualOpen]=useState(false),[justification,setJustification]=useState(''),[manualError,setManualError]=useState(''),[manualBusy,setManualBusy]=useState(false),[manualMessage,setManualMessage]=useState('');
-  useEffect(()=>{const close=(event:PointerEvent)=>{const target=event.target as Node;document.querySelectorAll<HTMLDetailsElement>('.data-explorer details[open]').forEach(details=>{if(!details.contains(target))details.open=false;});};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[]);
-  const central=result as (AnalysisResult&{analysisId?:string;movementTotal?:number})|null;
-  const skipPreviewRef=useRef(false);
-  const [movements,setMovements]=useState<Movement[]>(result?.movements??[]);const [movementTotal,setMovementTotal]=useState(central?.movementTotal??result?.movements.length??0);const [loadingRows,setLoadingRows]=useState(false);const [rowLoadProgress,setRowLoadProgress]=useState({loaded:0,total:0});
-  const [ageCounts,setAgeCounts]=useState<UnreconciledAgeCounts|null>(null);
-  const allStatusLabels=useMemo(()=>{if(!result)return[];const values:string[]=[];if(result.totals.automatic)values.push(statusLabels.automatic);if(result.totals.manual)values.push(statusLabels.manual);if(result.totals.unreconciled)values.push(statusLabels.unreconciled);if(result.totals.missingIdtr)values.push(statusLabels.missing_idtr);return values;},[result]);
-  const includedStatuses=useMemo(()=>(Object.entries(statusLabels) as [Movement['status'],string][]).filter(([,label])=>!(excluded.status??[]).includes(label)).map(([status])=>status),[excluded.status]);
-  const activeDateRange=useMemo(()=>rangeForAge(ageQuick,result?.reportDate),[ageQuick,result?.reportDate]);
-  useEffect(()=>{if(!central?.analysisId||!result?.reportDate)return;let active=true;void loadUnreconciledAgeCounts(central.analysisId,result.reportDate).then(counts=>{if(active)setAgeCounts(counts);});return()=>{active=false};},[central?.analysisId,result?.reportDate]);
-  useEffect(()=>{setMovements(result?.movements??[]);setMovementTotal(central?.movementTotal??result?.movements.length??0);},[result]);
-  useEffect(()=>{if(!central?.analysisId)return;if(skipPreviewRef.current){skipPreviewRef.current=false;return;}let active=true;setLoadingRows(true);setRowLoadProgress({loaded:0,total:movementTotal});void loadMovementsByStatus(central.analysisId,includedStatuses,1000,0,activeDateRange).then(page=>{if(active){setMovements(page.rows);setMovementTotal(page.total);setRowLoadProgress({loaded:page.rows.length,total:page.total});}}).finally(()=>{if(active)setLoadingRows(false);});return()=>{active=false};},[central?.analysisId,includedStatuses,activeDateRange]);
-  const loadEveryRow=async(statuses=includedStatuses,dateRange=activeDateRange)=>{if(!central?.analysisId||loadingRows)return;setLoadingRows(true);setRowLoadProgress({loaded:0,total:movementTotal});try{const rows=await loadAllMovementsByStatus(central.analysisId,statuses,(loaded,total)=>setRowLoadProgress({loaded,total}),dateRange);setMovements(rows);setMovementTotal(rows.length);}finally{setLoadingRows(false);}};
-  useEffect(()=>{const note=document.querySelector<HTMLElement>('.data-explorer .active-filter-note');if(!note||!result)return;document.querySelector('.data-explorer .status-availability')?.remove();document.querySelector('.data-explorer .quick-pending-filters')?.remove();const summary=document.createElement('div');summary.className='status-availability';const entries:[string,number,string][]=[['Reconciliados automaticamente',result.totals.automatic,'automatic'],['Não reconciliados',result.totals.unreconciled,'unreconciled'],['Sem IDTR',result.totals.missingIdtr,'missing_idtr']];for(const [label,total,status] of entries){const item=document.createElement('span');item.className=status;const strong=document.createElement('strong');strong.textContent=total.toLocaleString('pt-AO');item.append(strong,document.createTextNode(` ${label}`));summary.append(item);}const quick=document.createElement('div');quick.className='quick-pending-filters';const options:[typeof ageQuick,string][]=[['d0','Próprio dia'],['upTo1','Até 1 dia'],['upTo2','Até 2 dias'],['atLeast1','Há pelo menos 1 dia'],['atLeast2','Há pelo menos 2 dias'],['atLeast3','Há pelo menos 3 dias'],['all','Todos os não reconciliados']];for(const [value,label] of options){const button=document.createElement('button');button.type='button';button.className=ageQuick===value?'active':'';const text=document.createElement('span');text.textContent=label;const count=document.createElement('small');count.textContent=ageCounts?ageCounts[value].toLocaleString('pt-AO'):'…';button.append(text,count);button.onclick=()=>{const statuses:Movement['status'][]=['unreconciled'];skipPreviewRef.current=true;setExcluded(current=>({...current,status:['Reconciliado automaticamente','Reconciliado manualmente','Sem IDTR','Erro de dados']}));setAgeQuick(value);void loadEveryRow(statuses,rangeForAge(value,result.reportDate));};quick.append(button);}note.before(summary,quick);note.textContent=loadingRows?'A base central está a enviar os movimentos. Acompanhe a contagem abaixo.':movements.length<movementTotal?`${movements.length.toLocaleString('pt-AO')} de ${movementTotal.toLocaleString('pt-AO')} linhas carregadas. Use “Carregar todas as linhas” para completar a tabela.`:`Todas as ${movementTotal.toLocaleString('pt-AO')} linhas dos estados selecionados estão carregadas.`;return()=>{summary.remove();quick.remove();};},[result,movementTotal,loadingRows,movements.length,ageQuick,ageCounts]);
-  const availableDates=useMemo(()=>Object.entries(result?.dailyMetrics??{}).filter(([,metric])=>(includedStatuses.includes('automatic')&&metric.automatic>0)||(includedStatuses.includes('unreconciled')&&metric.unreconciled>0)||(includedStatuses.includes('missing_idtr')&&metric.missingIdtr>0)).map(([date])=>date).sort(),[result?.dailyMetrics,includedStatuses]);
-  const unique=useMemo(()=>Object.fromEntries(columns.map(column=>[column.key,column.key==='status'?allStatusLabels:column.key==='reportDate'?availableDates:[...new Set(movements.map(movement=>valueOf(movement,column.key)))].sort((a,b)=>a.localeCompare(b,'pt',{numeric:true}))])) as Record<ColumnKey,string[]>,[movements,availableDates,allStatusLabels]);
-  const filtered=useMemo(()=>movements.filter(movement=>{if(search&&!columns.some(column=>valueOf(movement,column.key).toLocaleLowerCase('pt').includes(search.toLocaleLowerCase('pt'))))return false;const age=ageInDays(movement,result?.reportDate);if(ageQuick==='d0'&&age!==0)return false;if(ageQuick==='upTo1'&&(age===null||age>1))return false;if(ageQuick==='upTo2'&&(age===null||age>2))return false;if(ageQuick==='atLeast1'&&(age===null||age<1))return false;if(ageQuick==='atLeast2'&&(age===null||age<2))return false;if(ageQuick==='atLeast3'&&(age===null||age<3))return false;return columns.every(column=>!(excluded[column.key]??[]).includes(valueOf(movement,column.key)));}).sort((a,b)=>{const comparison=compareMovements(a,b,sort.key);return sort.direction==='asc'?comparison:-comparison;}),[movements,search,excluded,sort,ageQuick,result?.reportDate]);
-  const visible=columns.filter(column=>!hidden.includes(column.key));
-  const changeSort=(key:ColumnKey)=>setSort(current=>current.key===key?{key,direction:current.direction==='asc'?'desc':'asc'}:{key,direction:'asc'});
-  const eligible=filtered.filter(movement=>movement.status==='unreconciled'||movement.status==='missing_idtr'||movement.status==='data_error');
-  const toggleMovement=(id:string)=>setSelected(current=>current.includes(id)?current.filter(value=>value!==id):[...current,id]);
-  const reconcileSelected=async()=>{if(!central?.analysisId||!selected.length)return;setManualBusy(true);setManualError('');try{const outcome=await reconcileMovementsManually(central.analysisId,selected,justification);setMovements(current=>current.map(movement=>selected.includes(movement.id)?{...movement,status:'manual'}:movement));setManualMessage(`${outcome.count.toLocaleString('pt-AO')} movimento(s) reconciliado(s) manualmente.`);setSelected([]);setJustification('');setManualOpen(false);}catch(cause){setManualError(cause instanceof Error?cause.message:'Não foi possível reconciliar os movimentos.');}finally{setManualBusy(false);}};
-  const yieldFrame=()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
-  const getExportRows=async()=>{if(!central?.analysisId)return filtered;setExportProgress({percent:4,stage:'A carregar todas as linhas filtradas da base central',processed:0});const all=await loadAllMovementsByStatus(central.analysisId,includedStatuses,(loaded,total)=>setExportProgress({percent:Math.min(40,4+Math.round(loaded/Math.max(1,total)*36)),stage:'A carregar todas as linhas filtradas da base central',processed:loaded}),activeDateRange);return all.filter(movement=>{if(search&&!columns.some(column=>valueOf(movement,column.key).toLocaleLowerCase('pt').includes(search.toLocaleLowerCase('pt'))))return false;const age=ageInDays(movement,result?.reportDate);if(ageQuick==='d0'&&age!==0)return false;if(ageQuick==='upTo1'&&(age===null||age>1))return false;if(ageQuick==='upTo2'&&(age===null||age>2))return false;if(ageQuick==='atLeast1'&&(age===null||age<1))return false;if(ageQuick==='atLeast2'&&(age===null||age<2))return false;if(ageQuick==='atLeast3'&&(age===null||age<3))return false;return columns.every(column=>!(excluded[column.key]??[]).includes(valueOf(movement,column.key)));}).sort((a,b)=>{const comparison=compareMovements(a,b,sort.key);return sort.direction==='asc'?comparison:-comparison;});};
-  const finishExport=async()=>{setExportProgress(current=>({...current,percent:100,stage:'Ficheiro concluído — a iniciar o download'}));await new Promise(resolve=>setTimeout(resolve,500));setBusy('');};
-  const exportExcel=async()=>{if(!filtered.length)return;setBusy('excel');setExportProgress({percent:5,stage:'A carregar o gerador de Excel',processed:0});try{const exportRows=await getExportRows();const ExcelJS=await import('exceljs');setExportProgress({percent:18,stage:'A preparar as colunas',processed:0});const workbook=new ExcelJS.Workbook(),sheet=workbook.addWorksheet('Movimentos');sheet.columns=visible.map(column=>({header:column.label,key:column.key,width:column.key==='description'||column.key==='complementaryInfo'?45:column.key==='status'?28:18}));for(let index=0;index<exportRows.length;index++){const movement=exportRows[index];sheet.addRow(Object.fromEntries(visible.map(column=>[column.key,column.key==='amount'?movement.amount:valueOf(movement,column.key)])));if(index%100===0){setExportProgress({percent:20+Math.round(index/exportRows.length*60),stage:'A inserir as linhas no ficheiro Excel',processed:index+1});await yieldFrame();}}sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF3718B4'}};sheet.autoFilter={from:{row:1,column:1},to:{row:1,column:visible.length}};sheet.views=[{state:'frozen',ySplit:1}];setExportProgress({percent:86,stage:'A finalizar e comprimir o ficheiro Excel',processed:exportRows.length});const buffer=await workbook.xlsx.writeBuffer();setExportProgress({percent:97,stage:'A preparar o download',processed:exportRows.length});download(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`movimentos_${safeName(result?.reportDate??'exportacao')}.xlsx`);await logPlatformAction('export_excel','movement_export',{rows:exportRows.length,reportDate:result?.reportDate,states:includedStatuses});await finishExport();}catch(error){setBusy('');throw error;}};
-  const exportPdf=async()=>{if(!filtered.length)return;setBusy('pdf');setExportProgress({percent:5,stage:'A carregar o gerador de PDF',processed:0});try{const exportRows=await getExportRows();const [{jsPDF},{default:autoTable}]=await Promise.all([import('jspdf'),import('jspdf-autotable')]);setExportProgress({percent:20,stage:'A preparar as linhas do relatório',processed:0});const body:string[][]=[];for(let index=0;index<exportRows.length;index++){const movement=exportRows[index];body.push(visible.map(column=>column.key==='amount'?movement.amount.toLocaleString('pt-AO',{minimumFractionDigits:2}):valueOf(movement,column.key)));if(index%100===0){setExportProgress({percent:20+Math.round(index/exportRows.length*45),stage:'A preparar as linhas do relatório',processed:index+1});await yieldFrame();}}const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});doc.setFontSize(12);doc.text('Reconciliação Real Time — movimentos filtrados',10,10);doc.setFontSize(8);doc.text(`${exportRows.length.toLocaleString('pt-AO')} linhas · ${new Date().toLocaleString('pt-AO')}`,10,15);setExportProgress({percent:72,stage:'A paginar a tabela em formato horizontal',processed:exportRows.length});await yieldFrame();autoTable(doc,{startY:19,head:[visible.map(column=>column.label)],body,styles:{fontSize:5,cellPadding:1,overflow:'linebreak'},headStyles:{fillColor:[55,24,180]},horizontalPageBreak:false,tableWidth:'auto',margin:{left:7,right:7},didDrawPage:data=>{doc.setFontSize(7);doc.text(`Página ${data.pageNumber}`,280,204,{align:'right'});}});setExportProgress({percent:96,stage:'A preparar o download',processed:exportRows.length});doc.save(`movimentos_${safeName(result?.reportDate??'exportacao')}.pdf`);await logPlatformAction('export_pdf','movement_export',{rows:exportRows.length,reportDate:result?.reportDate,states:includedStatuses});await finishExport();}catch(error){setBusy('');throw error;}};
-  const rowLoadPercent=Math.min(100,Math.round((loadingRows?rowLoadProgress.loaded:movements.length)/Math.max(1,loadingRows?rowLoadProgress.total:movementTotal)*100));
-  const activeFilterCount=(search.trim()?1:0)+(ageQuick!=='all'?1:0)+Object.values(excluded).filter(values=>(values?.length??0)>0).length;
-  const filterCountIsExact=!loadingRows&&movements.length>=movementTotal;
-  if(!result)return <section className="panel empty-state"><FileSpreadsheet size={30}/><h2>Ainda não existem movimentos disponíveis</h2><p>Importe um extrato para consultar, filtrar e extrair os movimentos.</p><button className="primary-button" onClick={onImport}>Importar extrato</button></section>;
-  return <section className={`data-explorer panel ${fit?'fit-table':''}`}>{manualOpen&&<div className="manual-overlay" role="dialog" aria-modal="true"><div className="manual-dialog"><div className="manual-dialog-head"><span><CheckCircle2 size={22}/></span><div><p className="eyebrow">DECISÃO AUDITÁVEL</p><h3>Reconciliar manualmente</h3></div><button aria-label="Fechar" onClick={()=>setManualOpen(false)}><X size={18}/></button></div><p>Vai marcar <strong>{selected.length.toLocaleString('pt-AO')} movimento(s)</strong> como reconciliado(s) manualmente. O utilizador, a data, a hora e esta justificação ficam registados.</p><label>Justificação obrigatória<textarea value={justification} onChange={event=>setJustification(event.target.value)} placeholder="Explique o motivo da decisão manual…" rows={4}/><small>Mínimo de 10 caracteres.</small></label>{manualError&&<div className="error-box">{manualError}</div>}<footer><button onClick={()=>setManualOpen(false)}>Cancelar</button><button className="primary-button" disabled={manualBusy||justification.trim().length<10} onClick={()=>void reconcileSelected()}>{manualBusy?'A registar…':'Confirmar reconciliação'}</button></footer></div></div>}{manualMessage&&<div className="success-box">{manualMessage}</div>}{busy&&<div className="export-progress" role="status" aria-live="polite"><div className="export-spinner"><i/><i/><i/></div><div><span>A EXPORTAR {busy.toUpperCase()}</span><strong>{exportProgress.stage}</strong><p>{exportProgress.processed.toLocaleString('pt-AO')} linhas processadas</p><div><i style={{width:`${exportProgress.percent}%`}}/></div><small>Não atualize nem feche esta página durante a exportação.</small></div><b>{exportProgress.percent}%</b></div>}<div className="data-toolbar"><div><p className="eyebrow">CONSULTA E EXTRAÇÃO</p><h2>Movimentos</h2><p><strong>{filtered.length.toLocaleString('pt-AO')}</strong> linhas filtradas de <strong>{movements.length.toLocaleString('pt-AO')}</strong> carregadas por estado.</p></div><div className="data-actions"><label className="data-search"><Search size={15}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Pesquisar em todas as colunas"/></label><button className="manual-button" disabled={!selected.length} onClick={()=>{setManualError('');setManualOpen(true);}}><CheckCircle2 size={16}/>Reconciliar ({selected.length})</button><details className="column-picker"><summary><SlidersHorizontal size={15}/>Colunas</summary><div><nav><button type="button" onClick={()=>setHidden([])}>Todas</button><button type="button" onClick={()=>setHidden(columns.map(column=>column.key))}>Limpar</button></nav>{columns.map(column=><label key={column.key}><input type="checkbox" checked={!hidden.includes(column.key)} onChange={()=>setHidden(current=>current.includes(column.key)?current.filter(key=>key!==column.key):[...current,column.key])}/>{column.label}</label>)}</div></details><button className="secondary-button" onClick={()=>setFit(value=>!value)}>Ajustar ao ecrã</button><button className="export-button excel" disabled={!filtered.length||!!busy} onClick={()=>void exportExcel()}><FileSpreadsheet size={16}/>{busy==='excel'?'A gerar…':'Excel'}</button><button className="export-button pdf" disabled={!filtered.length||!!busy} onClick={()=>void exportPdf()}><FileText size={16}/>{busy==='pdf'?'A gerar…':'PDF'}</button></div></div><div className="active-filter-note">Vista inicial: apenas operações não reconciliadas. O filtro Estado permite selecionar também os reconciliados automaticamente, movimentos sem IDTR e erros de dados. Clique no título de qualquer coluna para ordenar.</div><div className={`filter-result-count ${filterCountIsExact?'exact':'partial'}`}><span>{activeFilterCount} filtro{activeFilterCount===1?'':'s'} ativo{activeFilterCount===1?'':'s'}</span><strong>{filtered.length.toLocaleString('pt-AO')} linhas correspondem aos filtros</strong><small>{filterCountIsExact?'Contagem exata sobre todas as linhas do intervalo selecionado.':`Resultado parcial sobre ${movements.length.toLocaleString('pt-AO')} de ${movementTotal.toLocaleString('pt-AO')} linhas carregadas.`}</small></div><div className={`table-load-control ${loadingRows?'loading':''}`} role="status" aria-live="polite"><div className="table-load-spinner" aria-hidden="true"><i/><i/><i/></div><div className="table-load-content"><strong>{loadingRows?'A carregar movimentos da base central':`${movements.length.toLocaleString('pt-AO')} de ${movementTotal.toLocaleString('pt-AO')} disponíveis`}</strong><span>{(loadingRows?rowLoadProgress.loaded:movements.length).toLocaleString('pt-AO')} / {(loadingRows?rowLoadProgress.total:movementTotal).toLocaleString('pt-AO')} linhas</span><div className="table-load-track"><i style={{width:`${rowLoadPercent}%`}}/></div><small>{loadingRows?'Não atualize nem feche esta página durante o carregamento.':movements.length<movementTotal?'Os botões de período carregam automaticamente todas as linhas necessárias.':'A tabela está totalmente carregada.'}</small></div><b className="table-load-percent">{rowLoadPercent}%</b><button type="button" className="primary-button" disabled={loadingRows||movements.length>=movementTotal} onClick={()=>void loadEveryRow()}>{loadingRows?'A carregar…':movements.length>=movementTotal?'Todas carregadas':'Carregar todas as linhas'}</button></div><div className="table-wrap"><table><thead><tr><th className="select-column"><input aria-label="Selecionar movimentos visíveis" type="checkbox" checked={eligible.length>0&&eligible.every(movement=>selected.includes(movement.id))} onChange={()=>setSelected(current=>eligible.every(movement=>current.includes(movement.id))?current.filter(id=>!eligible.some(movement=>movement.id===id)):[...new Set([...current,...eligible.map(movement=>movement.id)])])}/></th>{visible.map(column=><th key={column.key}><div><button type="button" onClick={()=>changeSort(column.key)}>{column.label}{sort.key===column.key?(sort.direction==='asc'?' ↑':' ↓'):''}</button><ColumnFilter column={column} values={unique[column.key]} selected={excluded[column.key]??[]} onChange={values=>setExcluded(current=>({...current,[column.key]:values}))}/></div></th>)}</tr></thead><tbody>{filtered.map(movement=><tr key={movement.id}><td className="select-column"><input aria-label={`Selecionar linha ${movement.row}`} type="checkbox" disabled={movement.status==='automatic'||movement.status==='manual'} checked={selected.includes(movement.id)} onChange={()=>toggleMovement(movement.id)}/></td>{visible.map(column=><td key={column.key} className={column.key==='amount'?'amount':column.key==='idtr'?'mono':''}>{column.key==='amount'?movement.amount.toLocaleString('pt-AO',{style:'currency',currency:'AOA'}):column.key==='status'?<span className={`badge ${movement.status}`}>{statusLabels[movement.status]}</span>:valueOf(movement,column.key)}</td>)}</tr>)}</tbody></table>{!filtered.length&&<div className="no-filter-results">Nenhuma linha corresponde aos filtros aplicados.</div>}</div><footer><span>As exportações incluem apenas as linhas filtradas e as colunas visíveis.</span><strong>PDF: A4 horizontal, ajustado a uma página de largura.</strong></footer></section>;
+function ColumnFilter({
+  column,
+  values,
+  selected,
+  onChange,
+}: {
+  column: (typeof columns)[number];
+  values: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const shown = values.filter((value) =>
+    value.toLocaleLowerCase("pt").includes(query.toLocaleLowerCase("pt")),
+  );
+  if (column.key === "reportDate") {
+    const included = values.filter((value) => !selected.includes(value));
+    const chosen =
+      selected.length > 0 && included.length === 1 ? included[0] : "";
+    return (
+      <details className="column-filter date-filter">
+        <summary title="Filtrar Data">
+          <ChevronDown size={12} />
+        </summary>
+        <div>
+          <strong>Filtrar Data</strong>
+          <label>
+            <span>Selecionar dia</span>
+            <input
+              type="date"
+              value={chosen}
+              min={values.at(0) ?? ""}
+              max={values.at(-1) ?? ""}
+              onChange={(event) =>
+                onChange(
+                  event.target.value
+                    ? values.filter((value) => value !== event.target.value)
+                    : [],
+                )
+              }
+            />
+          </label>
+          <nav>
+            <button type="button" onClick={() => onChange([])}>
+              Mostrar todos
+            </button>
+          </nav>
+        </div>
+      </details>
+    );
+  }
+  return (
+    <details className="column-filter">
+      <summary title={`Filtrar ${column.label}`}>
+        <ChevronDown size={12} />
+      </summary>
+      <div>
+        <strong>Filtrar {column.label}</strong>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Procurar valor…"
+        />
+        <nav>
+          <button type="button" onClick={() => onChange([])}>
+            Todos
+          </button>
+          <button type="button" onClick={() => onChange(values)}>
+            Limpar
+          </button>
+        </nav>
+        <section>
+          {shown.map((value) => (
+            <label key={value}>
+              <input
+                type="checkbox"
+                checked={!selected.includes(value)}
+                onChange={() =>
+                  onChange(
+                    selected.includes(value)
+                      ? selected.filter((item) => item !== value)
+                      : [...selected, value],
+                  )
+                }
+              />
+              <span>{value}</span>
+            </label>
+          ))}
+        </section>
+      </div>
+    </details>
+  );
+}
+
+export default function DataExplorer({
+  result,
+  onImport,
+}: {
+  result: AnalysisResult | null;
+  onImport: () => void;
+}) {
+  const [hidden, setHidden] = useState<ColumnKey[]>(
+    columns
+      .filter((column) => !column.defaultVisible)
+      .map((column) => column.key),
+  );
+  const [excluded, setExcluded] = useState<
+    Partial<Record<ColumnKey, string[]>>
+  >({
+    status: [
+      "Reconciliado automaticamente",
+      "Reconciliado manualmente",
+      "Sem IDTR",
+      "Erro de dados",
+    ],
+  });
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<Sort>({
+    key: "reportDate",
+    direction: "desc",
+  });
+  const [fit, setFit] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [ageQuick, setAgeQuick] = useState<
+    "all" | "d0" | "upTo1" | "upTo2" | "atLeast1" | "atLeast2" | "atLeast3"
+  >("all");
+  const [exportProgress, setExportProgress] = useState({
+    percent: 0,
+    stage: "",
+    processed: 0,
+  });
+  const [selected, setSelected] = useState<string[]>([]),
+    [manualOpen, setManualOpen] = useState(false),
+    [justification, setJustification] = useState(""),
+    [manualError, setManualError] = useState(""),
+    [manualBusy, setManualBusy] = useState(false),
+    [manualMessage, setManualMessage] = useState("");
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      document
+        .querySelectorAll<HTMLDetailsElement>(".data-explorer details[open]")
+        .forEach((details) => {
+          if (!details.contains(target)) details.open = false;
+        });
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+  const central = result as
+    | (AnalysisResult & { analysisId?: string; movementTotal?: number })
+    | null;
+  const skipPreviewRef = useRef(false);
+  const [movements, setMovements] = useState<Movement[]>(
+    result?.movements ?? [],
+  );
+  const [movementTotal, setMovementTotal] = useState(
+    central?.movementTotal ?? result?.movements.length ?? 0,
+  );
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [rowLoadProgress, setRowLoadProgress] = useState({
+    loaded: 0,
+    total: 0,
+  });
+  const [ageCounts, setAgeCounts] = useState<UnreconciledAgeCounts | null>(
+    null,
+  );
+  const [excludeOpening, setExcludeOpening] = useState(true);
+  const allStatusLabels = useMemo(() => {
+    if (!result) return [];
+    const values: string[] = [];
+    if (result.totals.automatic) values.push(statusLabels.automatic);
+    if (result.totals.manual) values.push(statusLabels.manual);
+    if (result.totals.unreconciled) values.push(statusLabels.unreconciled);
+    if (result.totals.missingIdtr) values.push(statusLabels.missing_idtr);
+    return values;
+  }, [result]);
+  const includedStatuses = useMemo(
+    () =>
+      (Object.entries(statusLabels) as [Movement["status"], string][])
+        .filter(([, label]) => !(excluded.status ?? []).includes(label))
+        .map(([status]) => status),
+    [excluded.status],
+  );
+  const activeDateRange = useMemo(
+    () => ({ ...rangeForAge(ageQuick, result?.reportDate), excludeOpening }),
+    [ageQuick, result?.reportDate, excludeOpening],
+  );
+  useEffect(() => {
+    if (!central?.analysisId || !result?.reportDate) return;
+    let active = true;
+    void loadUnreconciledAgeCounts(central.analysisId, result.reportDate, excludeOpening).then(
+      (counts) => {
+        if (active) setAgeCounts(counts);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [central?.analysisId, result?.reportDate, excludeOpening]);
+  useEffect(() => {
+    setMovements(result?.movements ?? []);
+    setMovementTotal(central?.movementTotal ?? result?.movements.length ?? 0);
+  }, [result]);
+  useEffect(() => {
+    if (!central?.analysisId) return;
+    if (skipPreviewRef.current) {
+      skipPreviewRef.current = false;
+      return;
+    }
+    let active = true;
+    setLoadingRows(true);
+    setRowLoadProgress({ loaded: 0, total: movementTotal });
+    void loadMovementsByStatus(
+      central.analysisId,
+      includedStatuses,
+      1000,
+      0,
+      activeDateRange,
+    )
+      .then((page) => {
+        if (active) {
+          setMovements(page.rows);
+          setMovementTotal(page.total);
+          setRowLoadProgress({ loaded: page.rows.length, total: page.total });
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingRows(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [central?.analysisId, includedStatuses, activeDateRange]);
+  const loadEveryRow = async (
+    statuses = includedStatuses,
+    dateRange: MovementDateRange = activeDateRange,
+  ) => {
+    if (!central?.analysisId || loadingRows) return;
+    setLoadingRows(true);
+    setRowLoadProgress({ loaded: 0, total: movementTotal });
+    try {
+      const rows = await loadAllMovementsByStatus(
+        central.analysisId,
+        statuses,
+        (loaded, total) => setRowLoadProgress({ loaded, total }),
+        { ...dateRange, excludeOpening },
+      );
+      setMovements(rows);
+      setMovementTotal(rows.length);
+    } finally {
+      setLoadingRows(false);
+    }
+  };
+  useEffect(() => {
+    const note = document.querySelector<HTMLElement>(
+      ".data-explorer .active-filter-note",
+    );
+    if (!note || !result) return;
+    document.querySelector(".data-explorer .status-availability")?.remove();
+    document.querySelector(".data-explorer .quick-pending-filters")?.remove();
+    const summary = document.createElement("div");
+    summary.className = "status-availability";
+    const entries: [string, number, string][] = [
+      ["Reconciliados automaticamente", result.totals.automatic, "automatic"],
+      ["Não reconciliados", result.totals.unreconciled, "unreconciled"],
+      ["Sem IDTR", result.totals.missingIdtr, "missing_idtr"],
+    ];
+    for (const [label, total, status] of entries) {
+      const item = document.createElement("span");
+      item.className = status;
+      const strong = document.createElement("strong");
+      strong.textContent = total.toLocaleString("pt-AO");
+      item.append(strong, document.createTextNode(` ${label}`));
+      summary.append(item);
+    }
+    const quick = document.createElement("div");
+    quick.className = "quick-pending-filters";
+    const options: [typeof ageQuick, string][] = [
+      ["d0", "Próprio dia"],
+      ["upTo1", "Até 1 dia"],
+      ["upTo2", "Até 2 dias"],
+      ["atLeast1", "Há pelo menos 1 dia"],
+      ["atLeast2", "Há pelo menos 2 dias"],
+      ["atLeast3", "Há pelo menos 3 dias"],
+      ["all", "Todos os não reconciliados"],
+    ];
+    for (const [value, label] of options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = ageQuick === value ? "active" : "";
+      const text = document.createElement("span");
+      text.textContent = label;
+      const count = document.createElement("small");
+      count.textContent = ageCounts
+        ? ageCounts[value].toLocaleString("pt-AO")
+        : "…";
+      button.append(text, count);
+      button.onclick = () => {
+        const statuses: Movement["status"][] = ["unreconciled"];
+        skipPreviewRef.current = true;
+        setExcluded((current) => ({
+          ...current,
+          status: [
+            "Reconciliado automaticamente",
+            "Reconciliado manualmente",
+            "Sem IDTR",
+            "Erro de dados",
+          ],
+        }));
+        setAgeQuick(value);
+        void loadEveryRow(statuses, rangeForAge(value, result.reportDate));
+      };
+      quick.append(button);
+    }
+    note.before(summary, quick);
+    note.textContent = loadingRows
+      ? "A base central está a enviar os movimentos. Acompanhe a contagem abaixo."
+      : movements.length < movementTotal
+        ? `${movements.length.toLocaleString("pt-AO")} de ${movementTotal.toLocaleString("pt-AO")} linhas carregadas. Use “Carregar todas as linhas” para completar a tabela.`
+        : `Todas as ${movementTotal.toLocaleString("pt-AO")} linhas dos estados selecionados estão carregadas.`;
+    return () => {
+      summary.remove();
+      quick.remove();
+    };
+  }, [
+    result,
+    movementTotal,
+    loadingRows,
+    movements.length,
+    ageQuick,
+    ageCounts,
+  ]);
+  const availableDates = useMemo(
+    () =>
+      Object.entries(result?.dailyMetrics ?? {})
+        .filter(
+          ([, metric]) =>
+            (includedStatuses.includes("automatic") && metric.automatic > 0) ||
+            (includedStatuses.includes("unreconciled") &&
+              metric.unreconciled > 0) ||
+            (includedStatuses.includes("missing_idtr") &&
+              metric.missingIdtr > 0),
+        )
+        .map(([date]) => date)
+        .sort(),
+    [result?.dailyMetrics, includedStatuses],
+  );
+  const unique = useMemo(
+    () =>
+      Object.fromEntries(
+        columns.map((column) => [
+          column.key,
+          column.key === "status"
+            ? allStatusLabels
+            : column.key === "reportDate"
+              ? availableDates
+              : [
+                  ...new Set(
+                    movements.map((movement) => valueOf(movement, column.key)),
+                  ),
+                ].sort((a, b) => a.localeCompare(b, "pt", { numeric: true })),
+        ]),
+      ) as Record<ColumnKey, string[]>,
+    [movements, availableDates, allStatusLabels],
+  );
+  const filtered = useMemo(
+    () =>
+      movements
+        .filter((movement) => {
+          if (
+            search &&
+            !columns.some((column) =>
+              valueOf(movement, column.key)
+                .toLocaleLowerCase("pt")
+                .includes(search.toLocaleLowerCase("pt")),
+            )
+          )
+            return false;
+          const age = ageInDays(movement, result?.reportDate);
+          if (ageQuick === "d0" && age !== 0) return false;
+          if (ageQuick === "upTo1" && (age === null || age > 1)) return false;
+          if (ageQuick === "upTo2" && (age === null || age > 2)) return false;
+          if (ageQuick === "atLeast1" && (age === null || age < 1))
+            return false;
+          if (ageQuick === "atLeast2" && (age === null || age < 2))
+            return false;
+          if (ageQuick === "atLeast3" && (age === null || age < 3))
+            return false;
+          return columns.every(
+            (column) =>
+              !(excluded[column.key] ?? []).includes(
+                valueOf(movement, column.key),
+              ),
+          );
+        })
+        .sort((a, b) => {
+          const comparison = compareMovements(a, b, sort.key);
+          return sort.direction === "asc" ? comparison : -comparison;
+        }),
+    [movements, search, excluded, sort, ageQuick, result?.reportDate],
+  );
+  const visible = columns.filter((column) => !hidden.includes(column.key));
+  const changeSort = (key: ColumnKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  const eligible = filtered.filter(
+    (movement) =>
+      movement.status === "unreconciled" ||
+      movement.status === "missing_idtr" ||
+      movement.status === "data_error",
+  );
+  const toggleMovement = (id: string) =>
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+  const reconcileSelected = async () => {
+    if (!central?.analysisId || !selected.length) return;
+    setManualBusy(true);
+    setManualError("");
+    try {
+      const outcome = await reconcileMovementsManually(
+        central.analysisId,
+        selected,
+        justification,
+      );
+      setMovements((current) =>
+        current.map((movement) =>
+          selected.includes(movement.id)
+            ? { ...movement, status: "manual" }
+            : movement,
+        ),
+      );
+      setManualMessage(
+        `${outcome.count.toLocaleString("pt-AO")} movimento(s) reconciliado(s) manualmente.`,
+      );
+      setSelected([]);
+      setJustification("");
+      setManualOpen(false);
+    } catch (cause) {
+      setManualError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível reconciliar os movimentos.",
+      );
+    } finally {
+      setManualBusy(false);
+    }
+  };
+  const yieldFrame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const getExportRows = async () => {
+    if (!central?.analysisId) return filtered;
+    setExportProgress({
+      percent: 4,
+      stage: "A carregar todas as linhas filtradas da base central",
+      processed: 0,
+    });
+    const all = await loadAllMovementsByStatus(
+      central.analysisId,
+      includedStatuses,
+      (loaded, total) =>
+        setExportProgress({
+          percent: Math.min(
+            40,
+            4 + Math.round((loaded / Math.max(1, total)) * 36),
+          ),
+          stage: "A carregar todas as linhas filtradas da base central",
+          processed: loaded,
+        }),
+      activeDateRange,
+    );
+    return all
+      .filter((movement) => {
+        if (
+          search &&
+          !columns.some((column) =>
+            valueOf(movement, column.key)
+              .toLocaleLowerCase("pt")
+              .includes(search.toLocaleLowerCase("pt")),
+          )
+        )
+          return false;
+        const age = ageInDays(movement, result?.reportDate);
+        if (ageQuick === "d0" && age !== 0) return false;
+        if (ageQuick === "upTo1" && (age === null || age > 1)) return false;
+        if (ageQuick === "upTo2" && (age === null || age > 2)) return false;
+        if (ageQuick === "atLeast1" && (age === null || age < 1)) return false;
+        if (ageQuick === "atLeast2" && (age === null || age < 2)) return false;
+        if (ageQuick === "atLeast3" && (age === null || age < 3)) return false;
+        return columns.every(
+          (column) =>
+            !(excluded[column.key] ?? []).includes(
+              valueOf(movement, column.key),
+            ),
+        );
+      })
+      .sort((a, b) => {
+        const comparison = compareMovements(a, b, sort.key);
+        return sort.direction === "asc" ? comparison : -comparison;
+      });
+  };
+  const finishExport = async () => {
+    setExportProgress((current) => ({
+      ...current,
+      percent: 100,
+      stage: "Ficheiro concluído — a iniciar o download",
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setBusy("");
+  };
+  const exportExcel = async () => {
+    if (!filtered.length) return;
+    setBusy("excel");
+    setExportProgress({
+      percent: 5,
+      stage: "A carregar o gerador de Excel",
+      processed: 0,
+    });
+    try {
+      const exportRows = await getExportRows();
+      const ExcelJS = await import("exceljs");
+      setExportProgress({
+        percent: 18,
+        stage: "A preparar as colunas",
+        processed: 0,
+      });
+      const workbook = new ExcelJS.Workbook(),
+        sheet = workbook.addWorksheet("Movimentos");
+      sheet.columns = visible.map((column) => ({
+        header: column.label,
+        key: column.key,
+        width:
+          column.key === "description" || column.key === "complementaryInfo"
+            ? 45
+            : column.key === "status"
+              ? 28
+              : 18,
+      }));
+      for (let index = 0; index < exportRows.length; index++) {
+        const movement = exportRows[index];
+        sheet.addRow(
+          Object.fromEntries(
+            visible.map((column) => [
+              column.key,
+              column.key === "amount"
+                ? movement.amount
+                : valueOf(movement, column.key),
+            ]),
+          ),
+        );
+        if (index % 100 === 0) {
+          setExportProgress({
+            percent: 20 + Math.round((index / exportRows.length) * 60),
+            stage: "A inserir as linhas no ficheiro Excel",
+            processed: index + 1,
+          });
+          await yieldFrame();
+        }
+      }
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF3718B4" },
+      };
+      sheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: visible.length },
+      };
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+      setExportProgress({
+        percent: 86,
+        stage: "A finalizar e comprimir o ficheiro Excel",
+        processed: exportRows.length,
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      setExportProgress({
+        percent: 97,
+        stage: "A preparar o download",
+        processed: exportRows.length,
+      });
+      download(
+        new Blob([buffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        `movimentos_${safeName(result?.reportDate ?? "exportacao")}.xlsx`,
+      );
+      await logPlatformAction("export_excel", "movement_export", {
+        rows: exportRows.length,
+        reportDate: result?.reportDate,
+        states: includedStatuses,
+      });
+      await finishExport();
+    } catch (error) {
+      setBusy("");
+      throw error;
+    }
+  };
+  const exportPdf = async () => {
+    if (!filtered.length) return;
+    setBusy("pdf");
+    setExportProgress({
+      percent: 5,
+      stage: "A carregar o gerador de PDF",
+      processed: 0,
+    });
+    try {
+      const exportRows = await getExportRows();
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+      setExportProgress({
+        percent: 20,
+        stage: "A preparar as linhas do relatório",
+        processed: 0,
+      });
+      const body: string[][] = [];
+      for (let index = 0; index < exportRows.length; index++) {
+        const movement = exportRows[index];
+        body.push(
+          visible.map((column) =>
+            column.key === "amount"
+              ? movement.amount.toLocaleString("pt-AO", {
+                  minimumFractionDigits: 2,
+                })
+              : valueOf(movement, column.key),
+          ),
+        );
+        if (index % 100 === 0) {
+          setExportProgress({
+            percent: 20 + Math.round((index / exportRows.length) * 45),
+            stage: "A preparar as linhas do relatório",
+            processed: index + 1,
+          });
+          await yieldFrame();
+        }
+      }
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+      doc.setFontSize(12);
+      doc.text("Reconciliação Real Time — movimentos filtrados", 10, 10);
+      doc.setFontSize(8);
+      doc.text(
+        `${exportRows.length.toLocaleString("pt-AO")} linhas · ${new Date().toLocaleString("pt-AO")}`,
+        10,
+        15,
+      );
+      setExportProgress({
+        percent: 72,
+        stage: "A paginar a tabela em formato horizontal",
+        processed: exportRows.length,
+      });
+      await yieldFrame();
+      autoTable(doc, {
+        startY: 19,
+        head: [visible.map((column) => column.label)],
+        body,
+        styles: { fontSize: 5, cellPadding: 1, overflow: "linebreak" },
+        headStyles: { fillColor: [55, 24, 180] },
+        horizontalPageBreak: false,
+        tableWidth: "auto",
+        margin: { left: 7, right: 7 },
+        didDrawPage: (data) => {
+          doc.setFontSize(7);
+          doc.text(`Página ${data.pageNumber}`, 280, 204, { align: "right" });
+        },
+      });
+      setExportProgress({
+        percent: 96,
+        stage: "A preparar o download",
+        processed: exportRows.length,
+      });
+      doc.save(
+        `movimentos_${safeName(result?.reportDate ?? "exportacao")}.pdf`,
+      );
+      await logPlatformAction("export_pdf", "movement_export", {
+        rows: exportRows.length,
+        reportDate: result?.reportDate,
+        states: includedStatuses,
+      });
+      await finishExport();
+    } catch (error) {
+      setBusy("");
+      throw error;
+    }
+  };
+  const rowLoadPercent = Math.min(
+    100,
+    Math.round(
+      ((loadingRows ? rowLoadProgress.loaded : movements.length) /
+        Math.max(1, loadingRows ? rowLoadProgress.total : movementTotal)) *
+        100,
+    ),
+  );
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    (ageQuick !== "all" ? 1 : 0) +
+    Object.values(excluded).filter((values) => (values?.length ?? 0) > 0)
+      .length;
+  const filterCountIsExact = !loadingRows && movements.length >= movementTotal;
+  if (!result)
+    return (
+      <section className="panel empty-state">
+        <FileSpreadsheet size={30} />
+        <h2>Ainda não existem movimentos disponíveis</h2>
+        <p>
+          Importe um extrato para consultar, filtrar e extrair os movimentos.
+        </p>
+        <button className="primary-button" onClick={onImport}>
+          Importar extrato
+        </button>
+      </section>
+    );
+  return (
+    <section className={`data-explorer panel ${fit ? "fit-table" : ""}`}>
+      {manualOpen && (
+        <div className="manual-overlay" role="dialog" aria-modal="true">
+          <div className="manual-dialog">
+            <div className="manual-dialog-head">
+              <span>
+                <CheckCircle2 size={22} />
+              </span>
+              <div>
+                <p className="eyebrow">DECISÃO AUDITÁVEL</p>
+                <h3>Reconciliar manualmente</h3>
+              </div>
+              <button aria-label="Fechar" onClick={() => setManualOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <p>
+              Vai marcar{" "}
+              <strong>
+                {selected.length.toLocaleString("pt-AO")} movimento(s)
+              </strong>{" "}
+              como reconciliado(s) manualmente. O utilizador, a data, a hora e
+              esta justificação ficam registados.
+            </p>
+            <label>
+              Justificação obrigatória
+              <textarea
+                value={justification}
+                onChange={(event) => setJustification(event.target.value)}
+                placeholder="Explique o motivo da decisão manual…"
+                rows={4}
+              />
+              <small>Mínimo de 10 caracteres.</small>
+            </label>
+            {manualError && <div className="error-box">{manualError}</div>}
+            <footer>
+              <button onClick={() => setManualOpen(false)}>Cancelar</button>
+              <button
+                className="primary-button"
+                disabled={manualBusy || justification.trim().length < 10}
+                onClick={() => void reconcileSelected()}
+              >
+                {manualBusy ? "A registar…" : "Confirmar reconciliação"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+      {manualMessage && <div className="success-box">{manualMessage}</div>}
+      {busy && (
+        <div className="export-progress" role="status" aria-live="polite">
+          <div className="export-spinner">
+            <i />
+            <i />
+            <i />
+          </div>
+          <div>
+            <span>A EXPORTAR {busy.toUpperCase()}</span>
+            <strong>{exportProgress.stage}</strong>
+            <p>
+              {exportProgress.processed.toLocaleString("pt-AO")} linhas
+              processadas
+            </p>
+            <div>
+              <i style={{ width: `${exportProgress.percent}%` }} />
+            </div>
+            <small>
+              Não atualize nem feche esta página durante a exportação.
+            </small>
+          </div>
+          <b>{exportProgress.percent}%</b>
+        </div>
+      )}
+      <div className="data-toolbar">
+        <div>
+          <p className="eyebrow">CONSULTA E EXTRAÇÃO</p>
+          <h2>Movimentos</h2>
+          <p>
+            <strong>{filtered.length.toLocaleString("pt-AO")}</strong> linhas
+            filtradas de{" "}
+            <strong>{movements.length.toLocaleString("pt-AO")}</strong>{" "}
+            carregadas por estado.
+          </p>
+        </div>
+        <div className="data-actions">
+          <label className="data-search">
+            <Search size={15} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Pesquisar em todas as colunas"
+            />
+          </label>
+          <button
+            className="manual-button"
+            disabled={!selected.length}
+            onClick={() => {
+              setManualError("");
+              setManualOpen(true);
+            }}
+          >
+            <CheckCircle2 size={16} />
+            Reconciliar ({selected.length})
+          </button>
+          <details className="column-picker">
+            <summary>
+              <SlidersHorizontal size={15} />
+              Colunas
+            </summary>
+            <div>
+              <nav>
+                <button type="button" onClick={() => setHidden([])}>
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHidden(columns.map((column) => column.key))}
+                >
+                  Limpar
+                </button>
+              </nav>
+              {columns.map((column) => (
+                <label key={column.key}>
+                  <input
+                    type="checkbox"
+                    checked={!hidden.includes(column.key)}
+                    onChange={() =>
+                      setHidden((current) =>
+                        current.includes(column.key)
+                          ? current.filter((key) => key !== column.key)
+                          : [...current, column.key],
+                      )
+                    }
+                  />
+                  {column.label}
+                </label>
+              ))}
+            </div>
+          </details>
+          <button
+            className="secondary-button"
+            onClick={() => setFit((value) => !value)}
+          >
+            Ajustar ao ecrã
+          </button>
+          <button
+            className="export-button excel"
+            disabled={!filtered.length || !!busy}
+            onClick={() => void exportExcel()}
+          >
+            <FileSpreadsheet size={16} />
+            {busy === "excel" ? "A gerar…" : "Excel"}
+          </button>
+          <button
+            className="export-button pdf"
+            disabled={!filtered.length || !!busy}
+            onClick={() => void exportPdf()}
+          >
+            <FileText size={16} />
+            {busy === "pdf" ? "A gerar…" : "PDF"}
+          </button>
+        </div>
+      </div>
+      <div className="active-filter-note">
+        Vista inicial: apenas operações não reconciliadas. O filtro Estado
+        permite selecionar também os reconciliados automaticamente, movimentos
+        sem IDTR e erros de dados. Clique no título de qualquer coluna para
+        ordenar.
+      </div>
+      <div className="table-boundary-control">
+        <div>
+          <strong>Ajuste do início da série</strong>
+          <small>{excludeOpening ? "Os fechos anteriores ao primeiro ficheiro estão excluídos da tabela e das exportações." : "A tabela inclui a fronteira inicial incompleta."}</small>
+        </div>
+        <button type="button" className={`boundary-toggle ${excludeOpening ? "active" : ""}`} aria-pressed={excludeOpening} onClick={() => setExcludeOpening((value) => !value)}>
+          <span>{excludeOpening ? "Fronteira inicial excluída" : "Incluir fronteira inicial"}</span><i />
+        </button>
+      </div>
+      <div
+        className={`filter-result-count ${filterCountIsExact ? "exact" : "partial"}`}
+      >
+        <span>
+          {activeFilterCount} filtro{activeFilterCount === 1 ? "" : "s"} ativo
+          {activeFilterCount === 1 ? "" : "s"}
+        </span>
+        <strong>
+          {filtered.length.toLocaleString("pt-AO")} linhas correspondem aos
+          filtros
+        </strong>
+        <small>
+          {filterCountIsExact
+            ? "Contagem exata sobre todas as linhas do intervalo selecionado."
+            : `Resultado parcial sobre ${movements.length.toLocaleString("pt-AO")} de ${movementTotal.toLocaleString("pt-AO")} linhas carregadas.`}
+        </small>
+      </div>
+      <div
+        className={`table-load-control ${loadingRows ? "loading" : ""}`}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="table-load-spinner" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="table-load-content">
+          <strong>
+            {loadingRows
+              ? "A carregar movimentos da base central"
+              : `${movements.length.toLocaleString("pt-AO")} de ${movementTotal.toLocaleString("pt-AO")} disponíveis`}
+          </strong>
+          <span>
+            {(loadingRows
+              ? rowLoadProgress.loaded
+              : movements.length
+            ).toLocaleString("pt-AO")}{" "}
+            /{" "}
+            {(loadingRows
+              ? rowLoadProgress.total
+              : movementTotal
+            ).toLocaleString("pt-AO")}{" "}
+            linhas
+          </span>
+          <div className="table-load-track">
+            <i style={{ width: `${rowLoadPercent}%` }} />
+          </div>
+          <small>
+            {loadingRows
+              ? "Não atualize nem feche esta página durante o carregamento."
+              : movements.length < movementTotal
+                ? "Os botões de período carregam automaticamente todas as linhas necessárias."
+                : "A tabela está totalmente carregada."}
+          </small>
+        </div>
+        <b className="table-load-percent">{rowLoadPercent}%</b>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={loadingRows || movements.length >= movementTotal}
+          onClick={() => void loadEveryRow()}
+        >
+          {loadingRows
+            ? "A carregar…"
+            : movements.length >= movementTotal
+              ? "Todas carregadas"
+              : "Carregar todas as linhas"}
+        </button>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th className="select-column">
+                <input
+                  aria-label="Selecionar movimentos visíveis"
+                  type="checkbox"
+                  checked={
+                    eligible.length > 0 &&
+                    eligible.every((movement) => selected.includes(movement.id))
+                  }
+                  onChange={() =>
+                    setSelected((current) =>
+                      eligible.every((movement) =>
+                        current.includes(movement.id),
+                      )
+                        ? current.filter(
+                            (id) =>
+                              !eligible.some((movement) => movement.id === id),
+                          )
+                        : [
+                            ...new Set([
+                              ...current,
+                              ...eligible.map((movement) => movement.id),
+                            ]),
+                          ],
+                    )
+                  }
+                />
+              </th>
+              {visible.map((column) => (
+                <th key={column.key}>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => changeSort(column.key)}
+                    >
+                      {column.label}
+                      {sort.key === column.key
+                        ? sort.direction === "asc"
+                          ? " ↑"
+                          : " ↓"
+                        : ""}
+                    </button>
+                    <ColumnFilter
+                      column={column}
+                      values={unique[column.key]}
+                      selected={excluded[column.key] ?? []}
+                      onChange={(values) =>
+                        setExcluded((current) => ({
+                          ...current,
+                          [column.key]: values,
+                        }))
+                      }
+                    />
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((movement) => (
+              <tr key={movement.id}>
+                <td className="select-column">
+                  <input
+                    aria-label={`Selecionar linha ${movement.row}`}
+                    type="checkbox"
+                    disabled={
+                      movement.status === "automatic" ||
+                      movement.status === "manual"
+                    }
+                    checked={selected.includes(movement.id)}
+                    onChange={() => toggleMovement(movement.id)}
+                  />
+                </td>
+                {visible.map((column) => (
+                  <td
+                    key={column.key}
+                    className={
+                      column.key === "amount"
+                        ? "amount"
+                        : column.key === "idtr"
+                          ? "mono"
+                          : ""
+                    }
+                  >
+                    {column.key === "amount" ? (
+                      movement.amount.toLocaleString("pt-AO", {
+                        style: "currency",
+                        currency: "AOA",
+                      })
+                    ) : column.key === "status" ? (
+                      <span className={`badge ${movement.status}`}>
+                        {statusLabels[movement.status]}
+                      </span>
+                    ) : (
+                      valueOf(movement, column.key)
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!filtered.length && (
+          <div className="no-filter-results">
+            Nenhuma linha corresponde aos filtros aplicados.
+          </div>
+        )}
+      </div>
+      <footer>
+        <span>
+          As exportações incluem apenas as linhas filtradas e as colunas
+          visíveis.
+        </span>
+        <strong>PDF: A4 horizontal, ajustado a uma página de largura.</strong>
+      </footer>
+    </section>
+  );
 }
