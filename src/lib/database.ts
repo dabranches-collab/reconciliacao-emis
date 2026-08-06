@@ -99,15 +99,21 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
     onProgress?.({percent,stage:`Reconciliação por IDTR · bloco ${bucket+1} de ${totalBuckets}`,processed:bucket+1,total:totalBuckets,unit:'blocos'});
   }
   await supabase.from('import_batches').update({processing_stage:'secondary_reconciliation',progress_percent:96}).eq('id',context.batchId);
-  onProgress?.({percent:96,stage:'A cruzar referências /26 e operação + descrição + valor',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
-  const secondary=await supabase.rpc('refresh_secondary_reconciliation',{p_analysis_id:context.analysisId});
-  if(secondary.error)throw secondary.error;
-  await supabase.from('import_batches').update({processing_stage:'metrics',progress_percent:97}).eq('id',context.batchId);
-  onProgress?.({percent:97,stage:'A reconstruir métricas diárias',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
+  const secondaryBuckets=64;
+  for(const stage of ['reference','operation'] as const){
+    for(let bucket=0;bucket<secondaryBuckets;bucket++){
+      const secondary=await supabase.rpc('refresh_secondary_reconciliation_bucket',{p_analysis_id:context.analysisId,p_stage:stage,p_bucket:bucket,p_bucket_count:secondaryBuckets});
+      if(secondary.error)throw secondary.error;
+      const completed=(stage==='reference'?0:secondaryBuckets)+bucket+1;
+      onProgress?.({percent:stage==='reference'?96:97,stage:stage==='reference'?`Referências /26 · bloco ${bucket+1} de ${secondaryBuckets}`:`Operação + descrição + valor · bloco ${bucket+1} de ${secondaryBuckets}`,processed:completed,total:secondaryBuckets*2,unit:'blocos'});
+    }
+  }
+  await supabase.from('import_batches').update({processing_stage:'metrics',progress_percent:98}).eq('id',context.batchId);
+  onProgress?.({percent:98,stage:'A reconstruir métricas diárias',processed:secondaryBuckets*2,total:secondaryBuckets*2,unit:'blocos'});
   const rebuiltMetrics=await supabase.rpc('refresh_reconciliation_daily_metrics',{p_analysis_id:context.analysisId});
   if(rebuiltMetrics.error)throw rebuiltMetrics.error;
-  await supabase.from('import_batches').update({processing_stage:'balances',progress_percent:98}).eq('id',context.batchId);
-  onProgress?.({percent:98,stage:'A validar saldos e fronteiras contabilísticas',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
+  await supabase.from('import_batches').update({processing_stage:'balances',progress_percent:99}).eq('id',context.batchId);
+  onProgress?.({percent:99,stage:'A validar saldos e fronteiras contabilísticas',processed:secondaryBuckets*2,total:secondaryBuckets*2,unit:'blocos'});
   const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
   if(refreshedBoundary.error)throw refreshedBoundary.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
