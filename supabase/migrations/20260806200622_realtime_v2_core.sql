@@ -60,6 +60,8 @@ create table public.rt_v2_movements (
   operation_number text,
   description_normalized text,
   balance numeric(20,2),
+  balance_sequence_valid boolean,
+  expected_balance numeric(20,2),
   native_idtr text,
   reference_26 text,
   status text not null default 'open' check (status in ('open','reconciled','manual','rejected')),

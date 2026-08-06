@@ -21,5 +21,12 @@ describe('normalização auditável V2',()=>{
     expect(validator.validate(normalizeMovementRow(raw({amount:100,balance:1100})))).toEqual({valid:true});
     expect(validator.validate(normalizeMovementRow(raw({amount:-40,balance:1060})))).toEqual({valid:true});
     expect(validator.validate(normalizeMovementRow(raw({amount:10,balance:999})))).toMatchObject({valid:false,expectedBalanceCents:107000,actualBalanceCents:99900});
+    expect(validator.validate(normalizeMovementRow(raw({amount:1,balance:1000})))).toEqual({valid:true});
+  });
+  it('mantém sequências de saldo independentes por conta e moeda',()=>{
+    const validator=new BalanceSequenceValidator();
+    expect(validator.validate(normalizeMovementRow(raw({currency:'AOA',amount:100,balance:1100})))).toEqual({valid:true});
+    expect(validator.validate(normalizeMovementRow(raw({currency:'USD',amount:5,balance:25})))).toEqual({valid:true});
+    expect(validator.validate(normalizeMovementRow(raw({currency:'AOA',amount:-100,balance:1000})))).toEqual({valid:true});
   });
 });

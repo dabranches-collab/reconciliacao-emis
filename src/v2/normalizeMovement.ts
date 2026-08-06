@@ -38,10 +38,11 @@ export function normalizeMovementRow(raw:RawMovementRow):NormalizedMovement{
 export class BalanceSequenceValidator{
   private readonly last=new Map<string,number>();
   validate(movement:NormalizedMovement){
-    const previous=this.last.get(movement.account);
+    const sequenceKey=`${movement.account}\u001f${movement.currency}`;
+    const previous=this.last.get(sequenceKey);
     if(movement.balanceCents!==null){
-      if(previous!==undefined&&previous+movement.amountCents!==movement.balanceCents)return {valid:false,expectedBalanceCents:previous+movement.amountCents,actualBalanceCents:movement.balanceCents};
-      this.last.set(movement.account,movement.balanceCents);
+      if(previous!==undefined&&previous+movement.amountCents!==movement.balanceCents){this.last.set(sequenceKey,movement.balanceCents);return {valid:false,expectedBalanceCents:previous+movement.amountCents,actualBalanceCents:movement.balanceCents};}
+      this.last.set(sequenceKey,movement.balanceCents);
     }
     return {valid:true as const};
   }
