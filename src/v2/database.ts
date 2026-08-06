@@ -57,7 +57,9 @@ export async function finalizeV2Import(context:V2ImportContext){
 export async function loadV2Dashboard(seriesId:string):Promise<V2Dashboard|null>{
   const query=await supabase.from('rt_v2_calculations').select('state,rule_version,calculated_at,result,error_message').eq('series_id',seriesId).eq('metric','dashboard').maybeSingle();
   if(query.error)throw query.error;if(!query.data)return null;
-  return {state:query.data.state as V2Dashboard['state'],ruleVersion:query.data.rule_version,calculatedAt:query.data.calculated_at,result:query.data.result as Record<string,unknown>|null,error:query.data.error_message};
+  const metrics=await supabase.rpc('rt_v2_movement_metrics',{p_series_id:seriesId});
+  if(metrics.error)throw metrics.error;
+  return {state:query.data.state as V2Dashboard['state'],ruleVersion:query.data.rule_version,calculatedAt:query.data.calculated_at,result:{...((query.data.result??{}) as Record<string,unknown>),...((metrics.data??{}) as Record<string,unknown>)},error:query.data.error_message};
 }
 
 export async function loadLatestV2Dashboard():Promise<V2Dashboard|null>{

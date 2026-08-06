@@ -15,7 +15,7 @@ describe('métricas centrais V2',()=>{
   it('mede o fecho entre sexta e segunda como um dia útil',()=>{
     const rows=[movement('1','2026-07-10',1000,'IDTR=1'),movement('2','2026-07-13',-1000,'IDTR=1')];
     const outcome=reconcileCandidates(rows),metric=calculateOperationalMetrics(rows,outcome.groups,'v2').value!;
-    expect(metric.reconciledByDelay['D+1']).toBe(1);
+    expect(metric.reconciledByDelay['D+1']).toBe(2);
     expect(metric.averageReconciliationDays).toBe(1);
   });
 });

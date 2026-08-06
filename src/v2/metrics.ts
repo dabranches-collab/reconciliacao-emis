@@ -24,7 +24,7 @@ export function calculateOperationalMetrics(movements:CandidateMovement[],groups
   for(const movement of movements)if(!reconciledIds.has(movement.id))openByAge[ageBucket(operationalDaysBetween(movement.accountingDate,cutoff))]++;
   const byId=new Map(movements.map(movement=>[movement.id,movement]));
   const reconciledByDelay:OperationalMetrics['reconciledByDelay']={'D+0':0,'D+1':0,'D+2':0,'D+3':0,'D+4+':0};let totalDelay=0,measured=0;
-  for(const group of groups){const members=group.movementIds.map(id=>byId.get(id)).filter((row):row is CandidateMovement=>Boolean(row));if(!members.length)continue;const first=members.reduce((v,row)=>row.accountingDate<v?row.accountingDate:v,members[0].accountingDate),last=members.reduce((v,row)=>row.accountingDate>v?row.accountingDate:v,members[0].accountingDate),delay=operationalDaysBetween(first,last);reconciledByDelay[delayBucket(delay)]++;totalDelay+=delay;measured++;}
+  for(const group of groups){const members=group.movementIds.map(id=>byId.get(id)).filter((row):row is CandidateMovement=>Boolean(row));if(!members.length)continue;const first=members.reduce((v,row)=>row.accountingDate<v?row.accountingDate:v,members[0].accountingDate),last=members.reduce((v,row)=>row.accountingDate>v?row.accountingDate:v,members[0].accountingDate),delay=operationalDaysBetween(first,last);reconciledByDelay[delayBucket(delay)]+=members.length;totalDelay+=delay;measured++;}
   return {state:'completed',ruleVersion,calculatedAt,value:{cutoff,totals:{movements:movements.length,reconciled:reconciledIds.size,open:movements.length-reconciledIds.size,amountCents:movements.reduce((sum,row)=>sum+row.amountCents,0)},openByAge,reconciledByDelay,averageReconciliationDays:measured?totalDelay/measured:null},error:null};
 }
 
