@@ -28,6 +28,53 @@ create table if not exists public.import_job_checkpoints (
 create index if not exists import_job_checkpoints_batch_stage_idx
   on public.import_job_checkpoints(batch_id,stage,status);
 
+create table if not exists public.import_upload_parts (
+  batch_id uuid not null references public.import_batches(id) on delete cascade,
+  part_number integer not null check (part_number > 0),
+  etag text not null,
+  byte_size bigint not null check (byte_size > 0),
+  completed_at timestamptz not null default now(),
+  primary key (batch_id,part_number)
+);
+
+alter table public.import_upload_parts enable row level security;
+
+drop policy if exists import_upload_parts_read on public.import_upload_parts;
+create policy import_upload_parts_read on public.import_upload_parts
+for select to authenticated using (
+  exists (
+    select 1 from public.import_batches b
+    where b.id=batch_id
+      and (b.uploaded_by=(select auth.uid()) or (select private.is_admin()))
+  )
+);
+
+drop policy if exists import_upload_parts_write on public.import_upload_parts;
+create policy import_upload_parts_write on public.import_upload_parts
+for insert to authenticated with check (
+  exists (
+    select 1 from public.import_batches b
+    where b.id=batch_id and b.uploaded_by=(select auth.uid())
+  )
+);
+
+drop policy if exists import_upload_parts_update on public.import_upload_parts;
+create policy import_upload_parts_update on public.import_upload_parts
+for update to authenticated using (
+  exists (
+    select 1 from public.import_batches b
+    where b.id=batch_id and b.uploaded_by=(select auth.uid())
+  )
+) with check (
+  exists (
+    select 1 from public.import_batches b
+    where b.id=batch_id and b.uploaded_by=(select auth.uid())
+  )
+);
+
+revoke delete on public.import_upload_parts from anon,authenticated;
+grant select,insert,update on public.import_upload_parts to authenticated;
+
 alter table public.import_job_checkpoints enable row level security;
 
 drop policy if exists import_job_checkpoints_read on public.import_job_checkpoints;
@@ -79,3 +126,6 @@ grant execute on function public.get_import_job_progress(uuid) to authenticated;
 
 comment on table public.import_job_checkpoints is
   'Checkpoints idempotentes escritos exclusivamente pelo executor servidor da importação.';
+
+comment on table public.import_upload_parts is
+  'Inventário persistente dos blocos R2 concluídos, permitindo retoma segura noutro dispositivo.';

@@ -28,10 +28,10 @@ async function requestWithRetry(request:Request,input:RequestInfo|URL,init:Reque
   throw last instanceof Error?last:new Error('Não foi possível enviar a parte do ficheiro.');
 }
 
-export async function createMultipartSession(file:File,fileHash:string,token:string,request:Request=fetch){
+export async function createMultipartSession(file:File,fileHash:string,batchId:string,token:string,request:Request=fetch){
   const previous=readMultipartSession(fileHash);
   if(previous&&previous.fileSize===file.size)return previous;
-  const response=await request('/api/imports/multipart/create',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,fileSize:file.size,fileHash})});
+  const response=await request('/api/imports/multipart/create',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({batchId,filename:file.name,fileSize:file.size,fileHash})});
   const session=await json<MultipartSession>(response);saveMultipartSession(session);return session;
 }
 

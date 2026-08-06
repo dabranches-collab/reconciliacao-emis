@@ -1,11 +1,23 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "reconciliacao-emis",
+  "main": "worker/index.js",
   "compatibility_date": "2026-08-05",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  "r2_buckets": [
+    {
+      "binding": "IMPORT_FILES",
+      "bucket_name": "reconciliacao-emis-imports"
+    }
+  ],
+  "vars": {
+    "SUPABASE_URL": "https://sxvhsqlaonrxuuehlcwt.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zZh1YjCo-fSiccuCtAeNPA_h4OHipYw"
   },
   "observability": {
     "enabled": true,
