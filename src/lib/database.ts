@@ -114,8 +114,14 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
   if(rebuiltMetrics.error)throw rebuiltMetrics.error;
   await supabase.from('import_batches').update({processing_stage:'balances',progress_percent:99}).eq('id',context.batchId);
   onProgress?.({percent:99,stage:'A validar saldos e fronteiras contabilísticas',processed:secondaryBuckets*2,total:secondaryBuckets*2,unit:'blocos'});
-  const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
-  if(refreshedBoundary.error)throw refreshedBoundary.error;
+  const boundaryBuckets=64;
+  for(let bucket=0;bucket<boundaryBuckets;bucket++){
+    const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_bucket',{p_analysis_id:context.analysisId,p_bucket:bucket,p_bucket_count:boundaryBuckets,p_window_days:2});
+    if(refreshedBoundary.error)throw refreshedBoundary.error;
+    onProgress?.({percent:99,stage:`Saldos e fronteiras · bloco ${bucket+1} de ${boundaryBuckets}`,processed:bucket+1,total:boundaryBuckets,unit:'blocos'});
+  }
+  const finalizedBoundary=await supabase.rpc('finalize_boundary_balance_summary',{p_analysis_id:context.analysisId,p_bucket_count:boundaryBuckets});
+  if(finalizedBoundary.error)throw finalizedBoundary.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
   const rebuiltSummary=await supabase.rpc('refresh_reconciliation_dashboard_summary',{p_analysis_id:context.analysisId});
