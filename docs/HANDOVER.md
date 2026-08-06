@@ -73,6 +73,8 @@ O código é centralizado no GitHub. Os dados, utilizadores e logs são centrali
 
 ## 6. Modelo atual de permissões
 
+- `demo`: acesso de demonstração integrado na aplicação publicada, sempre na versão corrente. Usa apenas dados simulados no frontend, sem conta Supabase e sem leituras ou escritas na base central. Importação, reconciliação manual, gestão de utilizadores e auditoria ficam indisponíveis.
+
 - `platform_owner`: proprietário da plataforma. Acesso total e exclusivo à Auditoria. A conta `dabranches@gmail.com` usa este perfil e é protegida.
 - `client_admin`: administra contas operacionais e outros administradores do cliente, mas não vê a Auditoria nem o proprietário.
 - `analyst`: usa as funções operacionais, sem gestão de utilizadores.

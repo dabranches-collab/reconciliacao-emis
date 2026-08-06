@@ -207,9 +207,11 @@ function ColumnFilter({
 export default function DataExplorer({
   result,
   onImport,
+  isDemo = false,
 }: {
   result: AnalysisResult | null;
   onImport: () => void;
+  isDemo?: boolean;
 }) {
   const [hidden, setHidden] = useState<ColumnKey[]>(
     columns
@@ -532,7 +534,7 @@ export default function DataExplorer({
         : [...current, id],
     );
   const reconcileSelected = async () => {
-    if (!central?.analysisId || !selected.length) return;
+    if (isDemo || !central?.analysisId || !selected.length) return;
     setManualBusy(true);
     setManualError("");
     try {
@@ -703,11 +705,13 @@ export default function DataExplorer({
         }),
         `movimentos_${safeName(result?.reportDate ?? "exportacao")}.xlsx`,
       );
-      await logPlatformAction("export_excel", "movement_export", {
-        rows: exportRows.length,
-        reportDate: result?.reportDate,
-        states: includedStatuses,
-      });
+      if (!isDemo) {
+        await logPlatformAction("export_excel", "movement_export", {
+          rows: exportRows.length,
+          reportDate: result?.reportDate,
+          states: includedStatuses,
+        });
+      }
       await finishExport();
     } catch (error) {
       setBusy("");
@@ -795,11 +799,13 @@ export default function DataExplorer({
       doc.save(
         `movimentos_${safeName(result?.reportDate ?? "exportacao")}.pdf`,
       );
-      await logPlatformAction("export_pdf", "movement_export", {
-        rows: exportRows.length,
-        reportDate: result?.reportDate,
-        states: includedStatuses,
-      });
+      if (!isDemo) {
+        await logPlatformAction("export_pdf", "movement_export", {
+          rows: exportRows.length,
+          reportDate: result?.reportDate,
+          states: includedStatuses,
+        });
+      }
       await finishExport();
     } catch (error) {
       setBusy("");
@@ -929,7 +935,8 @@ export default function DataExplorer({
           </label>
           <button
             className="manual-button"
-            disabled={!selected.length}
+            disabled={isDemo || !selected.length}
+            title={isDemo ? "Indisponível no modo de demonstração" : undefined}
             onClick={() => {
               setManualError("");
               setManualOpen(true);
@@ -1090,6 +1097,7 @@ export default function DataExplorer({
                 <input
                   aria-label="Selecionar movimentos visíveis"
                   type="checkbox"
+                  disabled={isDemo}
                   checked={
                     eligible.length > 0 &&
                     eligible.every((movement) => selected.includes(movement.id))
@@ -1151,6 +1159,7 @@ export default function DataExplorer({
                     aria-label={`Selecionar linha ${movement.row}`}
                     type="checkbox"
                     disabled={
+                      isDemo ||
                       movement.status === "automatic" ||
                       movement.status === "manual"
                     }

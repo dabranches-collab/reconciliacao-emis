@@ -44,6 +44,7 @@ import {
   type PersistenceContext,
 } from "./lib/database";
 import packageJson from "../package.json";
+import { demoResult } from "./demoData";
 
 const money = new Intl.NumberFormat("pt-AO", {
   style: "currency",
@@ -856,6 +857,13 @@ export default function App() {
     return () => window.removeEventListener("beforeinstallprompt", capture);
   }, []);
   useEffect(() => {
+    if (identity.isDemo) {
+      setResult(demoResult);
+      setTool("realtime");
+      setView("results");
+      setError("");
+      return;
+    }
     let active = true;
     void loadPersistentResult()
       .then((persisted) => {
@@ -872,8 +880,12 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [identity.isDemo]);
   const process = async (file?: File) => {
+    if (identity.isDemo) {
+      setError("A importação está desativada no modo de demonstração.");
+      return;
+    }
     if (!file) return;
     setBusy(true);
     setError("");
@@ -928,6 +940,11 @@ export default function App() {
   };
   const refreshData = async () => {
     if (refreshing) return;
+    if (identity.isDemo) {
+      setResult(demoResult);
+      setHistoryRevision((value) => value + 1);
+      return;
+    }
     setRefreshing(true);
     setError("");
     try {
@@ -1173,6 +1190,8 @@ export default function App() {
           )}
           <button
             className={`nav-import ${view === "import" ? "active" : ""}`}
+            disabled={identity.isDemo}
+            title={identity.isDemo ? "Indisponível no modo de demonstração" : undefined}
             onClick={() => setView("import")}
           >
             <Upload size={19} />
@@ -1186,6 +1205,8 @@ export default function App() {
             <span>
               {identity.isPlatformOwner
                 ? "Proprietário da plataforma"
+                : identity.isDemo
+                  ? "Demonstração"
                 : identity.role === "client_admin"
                   ? "Administrador do cliente"
                   : identity.role === "auditor"
@@ -1249,6 +1270,12 @@ export default function App() {
             </button>
           </div>
         </header>
+        {identity.isDemo && (
+          <div className="demo-mode-banner">
+            MODO DEMONSTRAÇÃO · dados simulados · nenhuma alteração é enviada
+            para a base central
+          </div>
+        )}
         <RealTimeOverview revision={historyRevision} result={result} />
         {view === "import" && (
           <section
@@ -1302,7 +1329,7 @@ export default function App() {
         {view === "guide" && <Guide />}
         {view === "history" && <HistoryDashboard result={result} />}
         {view === "movements" && (
-          <DataExplorer result={result} onImport={() => setView("import")} />
+          <DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />
         )}
         {view === "users" && identity.canManageUsers && <UserManagement />}
         {view === "audit" && identity.canViewAudit && <AuditLogPanel />}

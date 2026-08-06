@@ -13,24 +13,27 @@ import { logPlatformAccess } from "./lib/database";
 type Identity = {
   name: string;
   email: string;
-  role: "platform_owner" | "client_admin" | "analyst" | "auditor";
+  role: "platform_owner" | "client_admin" | "analyst" | "auditor" | "demo";
+  isDemo: boolean;
   isAdmin: boolean;
   isPlatformOwner: boolean;
   canManageUsers: boolean;
   canViewAudit: boolean;
   signOut: () => Promise<void>;
 };
-const demoIdentity: Identity = {
-  name: "Diogo Abranches",
-  email: "dabranches@gmail.com",
-  role: "platform_owner",
-  isAdmin: true,
-  isPlatformOwner: true,
-  canManageUsers: true,
-  canViewAudit: true,
-  signOut: async () => {},
-};
-const AuthContext = createContext<Identity>(demoIdentity);
+const demoIdentity = (signOut: () => Promise<void>): Identity => ({
+  name: "Utilizador Demo",
+  email: "demo@reconciliacao.local",
+  role: "demo",
+  isDemo: true,
+  isAdmin: false,
+  isPlatformOwner: false,
+  canManageUsers: false,
+  canViewAudit: false,
+  signOut,
+});
+const emptyIdentity = demoIdentity(async () => {});
+const AuthContext = createContext<Identity>(emptyIdentity);
 export const useAuth = () => useContext(AuthContext);
 
 export default function AuthGate({ children }: { children: ReactNode }) {
@@ -40,7 +43,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [identity, setIdentity] = useState<Identity>(demoIdentity);
+  const [identity, setIdentity] = useState<Identity>(emptyIdentity);
+  const [demoMode, setDemoMode] = useState(false);
   useEffect(() => {
     if (!client) return;
     const loadIdentity = async (nextSession: Session | null) => {
@@ -74,6 +78,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         name,
         email,
         role,
+        isDemo: false,
         isAdmin: canManageUsers,
         isPlatformOwner,
         canManageUsers,
@@ -94,7 +99,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   if (!client)
     return (
-      <AuthContext.Provider value={demoIdentity}>
+      <AuthContext.Provider value={demoIdentity(async () => setDemoMode(false))}>
         {children}
       </AuthContext.Provider>
     );
@@ -103,6 +108,12 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <div className="auth-page">
         <p>A validar a sessão…</p>
       </div>
+    );
+  if (demoMode)
+    return (
+      <AuthContext.Provider value={demoIdentity(async () => setDemoMode(false))}>
+        {children}
+      </AuthContext.Provider>
     );
   if (session)
     return (
@@ -159,6 +170,20 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <button className="primary-button" disabled={loading}>
           {loading ? "A entrar…" : "Entrar"}
         </button>
+        <button
+          type="button"
+          className="demo-login-button"
+          disabled={loading}
+          onClick={() => {
+            setError("");
+            setDemoMode(true);
+          }}
+        >
+          Explorar demonstração
+        </button>
+        <small className="demo-login-note">
+          Dados simulados · nenhuma alteração na base central
+        </small>
       </form>
     </div>
   );
