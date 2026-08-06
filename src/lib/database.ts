@@ -65,7 +65,7 @@ const movementColumns='id,source_row,movement_date,accounting_date,account,amoun
 
 export async function loadMovementsByStatus(analysisId:string,statuses:Movement['status'][],limit=1000,offset=0){
   if(!statuses.length)return{rows:[] as Movement[],total:0};
-  const query=await supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).order('accounting_date',{ascending:false}).range(offset,offset+limit-1);
+  const query=await supabase.from('movements').select(movementColumns,{count:'exact'}).eq('analysis_id',analysisId).in('status',statuses).order('accounting_date',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
   if(query.error)throw query.error;
   return{rows:(query.data??[]).map(row=>dbMovement(row as Record<string,unknown>)),total:query.count??0};
 }
@@ -81,13 +81,18 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
   if(latest.error)throw latest.error;if(!latest.data)return null;
   const analysisId=latest.data.id;
   const summary=latest.data.result_summary as AnalysisResult;
-  const initialStates:Movement['status'][]=['unreconciled'];if(summary.totals.missingIdtr>0)initialStates.push('missing_idtr');
+  const metricsQuery=await supabase.from('daily_metrics').select('metric_date,movements,automatic,unreconciled,missing_idtr,amount').eq('analysis_id',analysisId).order('metric_date',{ascending:true});
+  if(metricsQuery.error)throw metricsQuery.error;
+  const dailyMetrics:NonNullable<AnalysisResult['dailyMetrics']>=Object.fromEntries((metricsQuery.data??[]).map(row=>[row.metric_date,{movements:row.movements,automatic:row.automatic,unreconciled:row.unreconciled,missingIdtr:row.missing_idtr,amount:Number(row.amount)}]));
+  const consolidatedTotals=Object.values(dailyMetrics).reduce<AnalysisResult['totals']>((totals,day)=>({movements:totals.movements+day.movements,automatic:totals.automatic+day.automatic,manual:totals.manual,unreconciled:totals.unreconciled+day.unreconciled,missingIdtr:totals.missingIdtr+day.missingIdtr,amount:totals.amount+day.amount}),{movements:0,automatic:0,manual:0,unreconciled:0,missingIdtr:0,amount:0});
+  const metricDates=Object.keys(dailyMetrics).sort();
+  const initialStates:Movement['status'][]=['unreconciled'];if(consolidatedTotals.missingIdtr>0)initialStates.push('missing_idtr');
   const movementPreview=await loadMovementsByStatus(analysisId,initialStates);
   const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
   if(batches.error)throw batches.error;
   const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at};});
   const lastBatch=importHistory.find(item=>item.status==='completed');
-  return{...summary,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.total,importHistory,movements:movementPreview.rows};
+  return{...summary,periodStart:metricDates[0]??summary.periodStart,reportDate:metricDates.at(-1)??summary.reportDate,totals:consolidatedTotals,dailyMetrics,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.total,importHistory,movements:movementPreview.rows};
 }
 
 export async function logPlatformAccess(){const{data:{session}}=await supabase.auth.getSession();if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'login',entity_type:'session'});}
