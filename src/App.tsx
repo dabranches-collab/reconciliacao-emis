@@ -535,7 +535,8 @@ function ProcessingDashboard({
           {progress.total ? (
             <>
               <b>{(progress.processed ?? 0).toLocaleString("pt-AO")}</b> de{" "}
-              <b>{progress.total.toLocaleString("pt-AO")}</b> linhas
+              <b>{progress.total.toLocaleString("pt-AO")}</b>{" "}
+              {progress.unit ?? "linhas"}
             </>
           ) : progress.percent === 38 ? (
             <>Progresso estimado · a preparar a contagem real</>
@@ -918,10 +919,19 @@ export default function App() {
         throw new Error("Não foi possível preparar a importação central.");
       setProgress((previous) => ({
         ...previous,
-        percent: 99,
-        stage: "A finalizar a importação na base central",
+        percent: 88,
+        stage: "Movimentos guardados · a iniciar a reconciliação central",
       }));
-      await finalizePersistentImport(analyzed, persistence);
+      await finalizePersistentImport(analyzed, persistence, (next) =>
+        setProgress((previous) => ({
+          ...previous,
+          percent: next.percent,
+          stage: next.stage,
+          processed: next.processed,
+          total: next.total,
+          unit: next.unit,
+        })),
+      );
       const persisted = await loadPersistentResult();
       setResult(persisted ?? analyzed);
       setHistoryRevision((value) => value + 1);

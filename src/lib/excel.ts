@@ -1,7 +1,7 @@
 import type { AnalysisResult } from '../types';
 import type { PersistenceContext } from './database';
 
-export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number; liveTotals?: { movements: number; automatic: number; unreconciled: number; missingIdtr: number }; liveMovementTypes?: Record<string, { total: number; reconciled: number; unreconciled: number; missingIdtr: number }> }
+export interface AnalysisProgress { percent: number; stage: string; processed?: number; total?: number; unit?: 'linhas'|'blocos'; liveTotals?: { movements: number; automatic: number; unreconciled: number; missingIdtr: number }; liveMovementTypes?: Record<string, { total: number; reconciled: number; unreconciled: number; missingIdtr: number }> }
 
 type WorkerMessage =
   | { type: 'progress'; progress: AnalysisProgress }

@@ -3,7 +3,8 @@ import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './supabase';
 
 export type PersistenceContext={url:string;key:string;accessToken:string;analysisId:string;batchId:string};
 export type ImportStatus='processing'|'completed'|'failed';
-export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null};
+export type CentralImport={id:string;reportDate:string|null;filename:string;uploadedAt:string;uploadedBy:string;movementCount:number;insertedCount:number;duplicateCount:number;errorCount:number;status:ImportStatus;failureMessage:string|null;completedAt:string|null;processingStage?:string;progressPercent?:number;processedBucket?:number;totalBuckets?:number};
+export type FinalizationProgress={percent:number;stage:string;processed:number;total:number;unit:'blocos'};
 export type AuditLog={id:number;actor:string;email:string;action:string;entityType:string;details:Record<string,unknown>;createdAt:string};
 export type BoundaryBalanceSummary={totalOpenGroups:number;totalOpenBalance:number;openingGroups:number;openingBalance:number;closingGroups:number;closingBalance:number;operationalGroups:number;operationalBalance:number};
 export type UnreconciledAgeCounts={all:number;d0:number;upTo1:number;upTo2:number;atLeast1:number;atLeast2:number;atLeast3:number};
@@ -33,7 +34,7 @@ export async function preparePersistentImport(file:File,fileHash:string):Promise
   if(existing.data){
     const context={url:SUPABASE_URL,key:SUPABASE_PUBLISHABLE_KEY,accessToken:session.access_token,analysisId:analysis.id,batchId:existing.data.id};
     if(existing.data.status==='completed')return{duplicate:true,context};
-    const resumed=await supabase.from('import_batches').update({status:'processing',failure_message:null,error_count:0}).eq('id',existing.data.id);
+    const resumed=await supabase.from('import_batches').update({status:'processing',failure_message:null,error_count:0,completed_at:null}).eq('id',existing.data.id);
     if(resumed.error)throw resumed.error;
     await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_resumed',entity_type:'import_batch',entity_id:existing.data.id,analysis_id:analysis.id,details:{filename:file.name}});
     return{duplicate:false,context};
@@ -45,16 +46,20 @@ export async function preparePersistentImport(file:File,fileHash:string):Promise
   return{duplicate:false,context:{url:SUPABASE_URL,key:SUPABASE_PUBLISHABLE_KEY,accessToken:session.access_token,analysisId:analysis.id,batchId:batch.data.id}};
 }
 
-export async function finalizePersistentImport(result:AnalysisResult,context:PersistenceContext){
+export async function finalizePersistentImport(result:AnalysisResult,context:PersistenceContext,onProgress?:(progress:FinalizationProgress)=>void){
   const {data:{session}}=await supabase.auth.getSession();if(!session)throw new Error('A sessão terminou durante a importação.');
   const summary={...result,movements:[],groups:[]};
   const counted=await supabase.from('movements').select('id',{count:'exact',head:true}).eq('batch_id',context.batchId);
   if(counted.error)throw counted.error;
   const insertedCount=counted.count??0;
   const duplicateCount=Math.max(0,result.totals.movements-insertedCount);
-  const completedAt=new Date().toISOString();
-  const batchUpdate=await supabase.from('import_batches').update({report_date:result.reportDate||null,movement_count:result.totals.movements,inserted_count:insertedCount,duplicate_count:duplicateCount,status:'completed',failure_message:null,completed_at:completedAt}).eq('id',context.batchId);
+  const batchState=await supabase.from('import_batches').select('processed_bucket,total_buckets').eq('id',context.batchId).single();
+  if(batchState.error)throw batchState.error;
+  const totalBuckets=Math.max(1,Number(batchState.data.total_buckets??16));
+  let processedBucket=Number(batchState.data.processed_bucket??-1);
+  const batchUpdate=await supabase.from('import_batches').update({report_date:result.reportDate||null,movement_count:result.totals.movements,inserted_count:insertedCount,duplicate_count:duplicateCount,status:'processing',processing_stage:'primary_reconciliation',progress_percent:88,failure_message:null,completed_at:null,total_buckets:totalBuckets}).eq('id',context.batchId);
   if(batchUpdate.error)throw batchUpdate.error;
+  onProgress?.({percent:88,stage:'Movimentos guardados · a reconciliar grupos IDTR',processed:Math.max(0,processedBucket+1),total:totalBuckets,unit:'blocos'});
   const metrics=Object.entries(result.dailyMetrics??{}).map(([metric_date,value])=>({
     analysis_id:context.analysisId,
     metric_date,
@@ -65,26 +70,41 @@ export async function finalizePersistentImport(result:AnalysisResult,context:Per
     amount:value.amount,
   }));
   if(metrics.length){const saved=await supabase.from('daily_metrics').upsert(metrics,{onConflict:'analysis_id,metric_date'});if(saved.error)throw saved.error;}
-  for(let bucket=0;bucket<16;bucket++){
-    const refreshed=await supabase.rpc('refresh_accumulated_reconciliation_bucket',{p_analysis_id:context.analysisId,p_bucket:bucket,p_bucket_count:16});
+  for(let bucket=processedBucket+1;bucket<totalBuckets;bucket++){
+    const refreshed=await supabase.rpc('refresh_accumulated_reconciliation_bucket',{p_analysis_id:context.analysisId,p_bucket:bucket,p_bucket_count:totalBuckets});
     if(refreshed.error)throw refreshed.error;
+    processedBucket=bucket;
+    const percent=89+Math.floor(((bucket+1)/totalBuckets)*6);
+    const checkpoint=await supabase.from('import_batches').update({processing_stage:'primary_reconciliation',progress_percent:percent,processed_bucket:bucket}).eq('id',context.batchId);
+    if(checkpoint.error)throw checkpoint.error;
+    onProgress?.({percent,stage:`Reconciliação por IDTR · bloco ${bucket+1} de ${totalBuckets}`,processed:bucket+1,total:totalBuckets,unit:'blocos'});
   }
+  await supabase.from('import_batches').update({processing_stage:'secondary_reconciliation',progress_percent:96}).eq('id',context.batchId);
+  onProgress?.({percent:96,stage:'A cruzar referências /26 e operação + descrição + valor',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   const secondary=await supabase.rpc('refresh_secondary_reconciliation',{p_analysis_id:context.analysisId});
   if(secondary.error)throw secondary.error;
+  await supabase.from('import_batches').update({processing_stage:'metrics',progress_percent:97}).eq('id',context.batchId);
+  onProgress?.({percent:97,stage:'A reconstruir métricas diárias',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   const rebuiltMetrics=await supabase.rpc('refresh_reconciliation_daily_metrics',{p_analysis_id:context.analysisId});
   if(rebuiltMetrics.error)throw rebuiltMetrics.error;
+  await supabase.from('import_batches').update({processing_stage:'balances',progress_percent:98}).eq('id',context.batchId);
+  onProgress?.({percent:98,stage:'A validar saldos e fronteiras contabilísticas',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   const refreshedBoundary=await supabase.rpc('refresh_boundary_balance_summary',{p_analysis_id:context.analysisId,p_window_days:2});
   if(refreshedBoundary.error)throw refreshedBoundary.error;
   const analysisUpdate=await supabase.from('analyses').update({current_report_date:result.reportDate||null,period_start:result.periodStart||null,accounting_balance:result.accountingBalance,status:'completed',result_summary:summary,updated_at:new Date().toISOString()}).eq('id',context.analysisId);
   if(analysisUpdate.error)throw analysisUpdate.error;
   const rebuiltSummary=await supabase.rpc('refresh_reconciliation_dashboard_summary',{p_analysis_id:context.analysisId});
   if(rebuiltSummary.error)throw rebuiltSummary.error;
+  const completedAt=new Date().toISOString();
+  const completed=await supabase.from('import_batches').update({status:'completed',processing_stage:'completed',progress_percent:100,failure_message:null,completed_at:completedAt}).eq('id',context.batchId);
+  if(completed.error)throw completed.error;
+  onProgress?.({percent:100,stage:'Importação, reconciliação e indicadores concluídos',processed:totalBuckets,total:totalBuckets,unit:'blocos'});
   await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_completed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{filename:result.sourceFilename,movements:result.totals.movements,inserted:insertedCount,duplicates:duplicateCount}});
 }
 
 export async function failPersistentImport(context:PersistenceContext,message:string){
   const {data:{session}}=await supabase.auth.getSession();
-  await supabase.from('import_batches').update({status:'failed',failure_message:message,error_count:1,completed_at:null}).eq('id',context.batchId);
+  await supabase.from('import_batches').update({status:'failed',processing_stage:'failed',failure_message:message,error_count:1,completed_at:null}).eq('id',context.batchId);
   if(session)await supabase.from('audit_logs').insert({actor_id:session.user.id,action:'import_failed',entity_type:'import_batch',entity_id:context.batchId,analysis_id:context.analysisId,details:{message}});
 }
 
@@ -126,9 +146,9 @@ export async function loadPersistentResult():Promise<(AnalysisResult&{analysisId
   const metricDates=Object.keys(dailyMetrics).sort();
   const initialStates:Movement['status'][]=['unreconciled'];if(consolidatedTotals.missingIdtr>0)initialStates.push('missing_idtr');
   const movementPreview=await loadMovementsByStatus(analysisId,initialStates);
-  const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
+  const batches=await supabase.from('import_batches').select('id,report_date,original_filename,uploaded_at,uploaded_by,movement_count,inserted_count,duplicate_count,error_count,status,failure_message,completed_at,processing_stage,progress_percent,processed_bucket,total_buckets,profiles!import_batches_uploaded_by_fkey(full_name,email)').eq('analysis_id',analysisId).order('uploaded_at',{ascending:false}).limit(100);
   if(batches.error)throw batches.error;
-  const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at};});
+  const importHistory:CentralImport[]=(batches.data??[]).map(row=>{const profile=row.profiles as unknown as {full_name?:string;email?:string}|null;return{id:row.id,reportDate:row.report_date,filename:row.original_filename,uploadedAt:row.uploaded_at,uploadedBy:profile?.full_name||profile?.email||'',movementCount:row.movement_count,insertedCount:row.inserted_count,duplicateCount:row.duplicate_count,errorCount:row.error_count,status:row.status as ImportStatus,failureMessage:row.failure_message,completedAt:row.completed_at,processingStage:row.processing_stage,progressPercent:Number(row.progress_percent??0),processedBucket:Number(row.processed_bucket??-1),totalBuckets:Number(row.total_buckets??16)};});
   const lastBatch=importHistory.find(item=>item.status==='completed');
   return{...summary,periodStart:metricDates[0]??summary.periodStart,reportDate:metricDates.at(-1)??summary.reportDate,totals:consolidatedTotals,dailyMetrics,analysisId,lastUploadedAt:lastBatch?.uploadedAt,uploadedBy:lastBatch?.uploadedBy,movementTotal:movementPreview.total,importHistory,movements:movementPreview.rows};
 }
