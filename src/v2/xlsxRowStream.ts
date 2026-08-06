@@ -43,3 +43,13 @@ export async function* streamXlsxRows(buffer:ArrayBuffer,onRows?:(count:number)=
   }
   onRows?.(count);
 }
+
+export async function estimateXlsxRows(buffer:ArrayBuffer){
+  const sheet=zipEntries(buffer).find(entry=>entry.name==='xl/worksheets/sheet1.xml');
+  if(!sheet)return null;
+  const reader=entryStream(buffer,sheet).getReader();let prefix='';
+  try{
+    while(prefix.length<1_000_000){const {done,value}=await reader.read();if(done)break;prefix+=decoder.decode(value,{stream:true});const reference=/<dimension\s+ref="[A-Z]+\d+:?[A-Z]*?(\d+)"/.exec(prefix)?.[1];if(reference)return Number(reference);if(prefix.includes('<sheetData'))break;}
+    return null;
+  }finally{await reader.cancel();}
+}

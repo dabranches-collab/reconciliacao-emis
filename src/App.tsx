@@ -51,12 +51,16 @@ import {
 import packageJson from "../package.json";
 import { demoResult } from "./demoData";
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
+import { runV2Import } from "./v2/runImport";
+import V2Results from "./v2/V2Results";
+import type { V2Dashboard } from "./v2/database";
 
 const money = new Intl.NumberFormat("pt-AO", {
   style: "currency",
   currency: "AOA",
 });
 const APP_BUILD = packageJson.version;
+const REALTIME_V2_ACTIVE = true;
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -834,6 +838,7 @@ export default function App() {
       : "import";
   });
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [v2Dashboard,setV2Dashboard]=useState<V2Dashboard|null>(null);
   const [centralLoading,setCentralLoading]=useState(true);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress>({
@@ -926,6 +931,16 @@ export default function App() {
       return;
     }
     if (!file) return;
+    if(REALTIME_V2_ACTIVE){
+      setBusy(true);setError("");setProcessingFile(file.name);setProgress({percent:1,stage:"Ficheiro recebido"});setView("results");
+      try{
+        const outcome=await runV2Import(file,next=>setProgress(next));
+        if(!outcome.dashboard)throw new Error("A importação terminou sem indicadores V2 disponíveis.");
+        setV2Dashboard(outcome.dashboard);setHistoryRevision(value=>value+1);
+      }catch(cause){setError(readableError(cause,"Não foi possível concluir a importação V2."));setView("import");}
+      finally{setBusy(false);}
+      return;
+    }
     setBusy(true);
     setError("");
     setProcessingFile(file.name);
@@ -1418,8 +1433,9 @@ export default function App() {
         {view === "results"&&!busy&&centralLoading&&!result&&(
           <section className="central-loading" role="status"><div className="processing-spinner"><i/><i/><i/></div><div><p className="eyebrow">A SINCRONIZAR</p><h2>A carregar dados centrais</h2><p>Indicadores, movimentos e histórico estão a ser lidos em paralelo. Não atualize a página.</p></div></section>
         )}
-        {view === "results" && !busy && result && <Results result={result} />}
-        {view === "results" && !busy && !centralLoading && !result && (
+        {view === "results" && !busy && v2Dashboard && <V2Results dashboard={v2Dashboard} />}
+        {view === "results" && !busy && !v2Dashboard && result && <Results result={result} />}
+        {view === "results" && !busy && !v2Dashboard && !centralLoading && !result && (
           <SavedResults
             revision={historyRevision}
             onImport={() => setView("import")}
