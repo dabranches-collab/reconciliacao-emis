@@ -15,7 +15,7 @@
 
 .confirmation-filter-panels {
   display: grid;
-  grid-template-columns: minmax(270px, auto) minmax(360px, 1fr) minmax(330px, auto) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
 }
@@ -26,6 +26,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
+  min-height: 64px;
   margin: 0;
   padding: 8px 10px 10px;
   border: 1px solid var(--border, #d5dfdc);
@@ -65,9 +66,15 @@
 .confirmation-filter-group.status button.rejected { border-color: #a93333; background: #cf5151; color: #fff; }
 
 .confirmation-view-actions {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 7px;
-  align-content: center;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid var(--border, #d5dfdc);
+  border-radius: 12px;
+  background: var(--surface, #fff);
 }
 
 .confirmation-view-actions button {
@@ -80,6 +87,7 @@
 }
 
 :root[data-theme='dark'] .confirmation-filter-group,
+:root[data-theme='dark'] .confirmation-view-actions,
 :root[data-theme='dark'] .confirmation-view-actions button {
   border-color: #667772;
   background: #33413e;
@@ -116,13 +124,57 @@
 .confirmation-filter-group.status button:not(.active) { opacity: .58; }
 .confirmation-filter-group.status button.active { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 24%, transparent); }
 
-@media (max-width: 1450px) {
-  .confirmation-filter-panels { grid-template-columns: 1fr 1fr; }
-  .confirmation-view-actions { grid-template-columns: 1fr 1fr; }
+.confirmation-movement {
+  grid-template-columns: 112px 140px minmax(240px, 1fr) 145px 190px;
+}
+
+.confirmation-movement:has(> input[type='checkbox']) {
+  grid-template-columns: 24px 112px 140px minmax(240px, 1fr) 145px 190px;
+}
+
+.confirmation-movement-date b,
+.confirmation-movement-date em {
+  display: block;
+  white-space: nowrap;
+}
+
+.confirmation-movement-date b { font-size: 10px; }
+.confirmation-movement-date em {
+  margin-top: 2px;
+  color: var(--muted, #667772);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.confirmation-movement > input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #168862;
+  cursor: pointer;
+}
+
+.confirmation-movement.excluded {
+  opacity: .56;
+  border-left-color: #a7b1ae;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, #a7b1ae);
+}
+
+.confirmation-actions button:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+:root[data-theme='dark'] .confirmation-movement.excluded {
+  background: #3a4744;
 }
 
 @media (max-width: 760px) {
   .confirmation-filter-panels { grid-template-columns: 1fr; }
   .confirmation-filter-group { align-items: stretch; }
   .confirmation-filter-group button { flex: 1 1 auto; }
+  .confirmation-view-actions button { flex: 1 1 auto; }
+  .confirmation-movement:has(> input[type='checkbox']) {
+    grid-template-columns: 24px 80px 1fr;
+  }
 }
