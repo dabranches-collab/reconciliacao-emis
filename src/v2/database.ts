@@ -82,7 +82,7 @@ export async function loadActiveV2Import():Promise<ActiveV2Import|null>{
   const seriesId=await loadSeriesId();if(!seriesId)return null;
   const query=await supabase.from('rt_v2_imports')
     .select('id,original_filename,state,stage,progress,error_message,source_rows,inserted_rows,duplicate_rows,rejected_rows,heartbeat_at,live_stats')
-    .eq('series_id',seriesId).in('state',['validating','ingesting','reconciling','calculating'])
+    .eq('series_id',seriesId).in('state',['validating','ingesting','reconciling','calculating','failed'])
     .order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(query.error)throw query.error;
   return query.data?{...query.data,stage:cleanServerStage(query.data.stage)} as ActiveV2Import:null;

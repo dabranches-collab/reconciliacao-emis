@@ -55,7 +55,7 @@ import packageJson from "../package.json";
 import { demoResult } from "./demoData";
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
 import { runV2Import } from "./v2/runImport";
-import { loadActiveV2Import, loadLatestV2Dashboard } from "./v2/database";
+import { finalizeV2Import, loadActiveV2Import, loadLatestV2Dashboard } from "./v2/database";
 import V2History from "./v2/V2History";
 import V2Movements from "./v2/V2Movements";
 import {V2Assumptions,V2MovementGuide} from "./v2/V2Reference";
@@ -523,7 +523,7 @@ function ProcessingDashboard({
   const ingestionComplete = progress.percent >= 82;
   const liveMetrics = progress.liveV2
     ? [
-        { label: "Processados", value: (progress.processed ?? 0).toLocaleString("pt-AO"), done: ingestionComplete, tone: "total" },
+        { label: "Processados", value: (progress.storedRows ?? progress.processed ?? 0).toLocaleString("pt-AO"), done: ingestionComplete, tone: "total" },
         { label: "Reconciliados · provisório", value: progress.percent >= 100 ? "Concluído" : progress.liveV2.provisionalReconciled.toLocaleString("pt-AO"), done: progress.percent >= 100, tone: "good" },
         { label: "Com IDTR", value: progress.liveV2.withNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete, tone: "idtr" },
         { label: "Sem IDTR ( /26)", value: progress.liveV2.withoutNativeIdtr.toLocaleString("pt-AO"), done: ingestionComplete, tone: "warn" },
@@ -549,7 +549,7 @@ function ProcessingDashboard({
           <p>{fileName}</p>
         </div>
         <div className="processing-percent">
-          <strong>{Math.floor(displayPercent)}%</strong>
+          <strong>{displayPercent>=80&&displayPercent<100?displayPercent.toFixed(1):Math.floor(displayPercent)}%</strong>
           <span>
             {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
           </span>
@@ -568,7 +568,9 @@ function ProcessingDashboard({
             : progress.stage}
         </strong>
         <span className="line-counter">
-          {progress.total ? (
+          {progress.serverBlocks ? (
+            <><b>{progress.serverBlock?.toLocaleString("pt-AO")}</b> de <b>{progress.serverBlocks.toLocaleString("pt-AO")}</b> blocos</>
+          ) : progress.total ? (
             <>
               <b>{(progress.processed ?? 0).toLocaleString("pt-AO")}</b> de{" "}
               <b>{progress.total.toLocaleString("pt-AO")}</b>{" "}
@@ -945,11 +947,17 @@ export default function App() {
         const current=await loadActiveV2Import();if(!active)return;
         if(current){
           hadServerImport=true;setBusy(true);setProcessingFile(current.original_filename);setView('results');setError('');
-          const processed=Number(current.source_rows??0),inserted=Number(current.inserted_rows??0),live=current.live_stats,total=Number(live?.estimatedRows??processed);
+          const processed=Number(current.source_rows??0),inserted=Number(current.inserted_rows??0),live=current.live_stats,total=Number(live?.estimatedRows??processed),blockMatch=String(current.stage??'').match(/bloco\s+(\d+)\s+de\s+(\d+)/i);
+          if(current.state==='failed'&&processed>0&&processed===inserted&&String(current.error_message??'').startsWith('Não foi possível iniciar a reconciliação central')){
+            setProgress(previous=>({...previous,percent:80,stage:'Movimentos guardados · a retomar a reconciliação central no servidor',processed,total,storedRows:inserted,unit:'linhas'}));
+            await finalizeV2Import({seriesId:'',importId:current.id});
+            return;
+          }
           setProgress(previous=>({...previous,
             percent:Math.max(Number(current.progress)||0,previous.percent>81?previous.percent:0),
             stage:current.stage||'Processamento em curso no servidor. Aguarde.',processed,total,
             storedRows:inserted,unit:'linhas',heartbeatAt:current.heartbeat_at,
+            serverBlock:blockMatch?Number(blockMatch[1]):undefined,serverBlocks:blockMatch?Number(blockMatch[2]):undefined,
             liveV2:live?{withNativeIdtr:Number(live.withNativeIdtr??0),withoutNativeIdtr:Number(live.withoutNativeIdtr??0),reference26:Number(live.reference26??0),amountCents:Number(live.amountCents??0),provisionalReconciled:Number(live.provisionalReconciled??0),duplicates:Number(current.duplicate_rows??0),rejected:Number(current.rejected_rows??0)}:previous.liveV2,
             liveMovementTypes:live?.movementTypes??previous.liveMovementTypes,
           }));
