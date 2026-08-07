@@ -59,3 +59,27 @@
   line-height: 1.25;
   white-space: normal;
 }
+
+.v2-kpi.audit {
+  background: linear-gradient(135deg,#e1a500,#ffd85c);
+  color: #3f2e00;
+}
+.v2-kpi.audit small,
+.v2-kpi.audit strong,
+.v2-kpi.audit .v2-kpi-detail,
+.v2-kpi.audit .v2-kpi-detail b {
+  color: #3f2e00;
+  text-shadow: none;
+}
+.v2-kpi.audit .v2-kpi-icon { background: rgba(84,59,0,.13); }
+.v2-kpi.audit .v2-kpi-detail b {
+  border-color: rgba(84,59,0,.22);
+  background: rgba(255,255,255,.3);
+}
+.v2-kpi.audit.interactive:hover,
+.v2-kpi.audit.interactive:focus-visible {
+  outline-color: rgba(211,154,0,.32);
+}
+.v2-anomaly-link { color: #8a6200; }
+:root[data-theme='dark'] .v2-kpi.audit { filter: none; }
+:root[data-theme='dark'] .v2-anomaly-link { color: #ffd86a; }
