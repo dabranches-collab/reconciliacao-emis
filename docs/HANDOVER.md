@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.1.5`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.1.6`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
