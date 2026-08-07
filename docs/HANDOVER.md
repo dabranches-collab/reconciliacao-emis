@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.4.0`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.4.1`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -355,6 +355,8 @@ grupos de reconciliação na série atual.
   dos últimos 7 dias, ao histórico reconciliado e aos movimentos efetivamente
   fechados pela última importação. A importação de fecho fica registada no grupo
   e no movimento, com índice próprio para consulta e exportação rápidas.
+- A 2.4.1 repôs no cartão de movimentos reconciliados a indicação explícita
+  `Saldo balanceado: 0,00`, refletindo a condição de fecho dos grupos.
 
 ### 12.4 Operação e recuperação
 
