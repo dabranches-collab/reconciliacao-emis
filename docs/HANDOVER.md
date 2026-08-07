@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.3.0`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.3.1`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -345,6 +345,11 @@ grupos de reconciliação na série atual.
   ser fixo em 128/64 e passou a adaptar-se às chaves efetivamente trazidas por
   cada novo ficheiro, reduzindo chamadas vazias sem aumentar o tamanho de cada
   operação em ficheiros grandes.
+- A 2.3.1 alinhou a ordenação inicial da tabela Movimentos com o índice
+  `rt_v2_movements_open_age_idx`. A primeira página de 250 pendentes deixou de
+  ordenar todos os abertos em memória: a medição SQL passou de cerca de 7
+  segundos e mais de 50 mil páginas consultadas para cerca de 3 milissegundos e
+  22 páginas, eliminando o `statement timeout` ao entrar no menu.
 
 ### 12.4 Operação e recuperação
 
