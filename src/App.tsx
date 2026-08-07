@@ -255,7 +255,7 @@ function Results({ result }: { result: AnalysisResult }) {
               <small>Créditos menos débitos</small>
             </article>
             <article>
-              <span>Saldo final MRSALD</span>
+              <span>Saldo final do extrato</span>
               <strong>
                 {result.rawAmounts.closingBalance === null
                   ? "—"

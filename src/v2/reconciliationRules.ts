@@ -6,15 +6,15 @@ export const openAgeDefinitions={
 } as const;
 
 export const reconciliationRules=[
-  {id:'idtr',order:1,title:'IDTR nativo',summary:'Fecha todos os movimentos com o mesmo IDTR apenas quando o conjunto soma zero.',conditions:['IDTR presente no extrato','Dois ou mais movimentos','Soma de MRVLR = 0,00'],method:'idtr'},
+  {id:'idtr',order:1,title:'IDTR nativo',summary:'Fecha todos os movimentos com o mesmo IDTR apenas quando o conjunto soma zero.',conditions:['IDTR presente no extrato','Dois ou mais movimentos','Soma dos valores dos movimentos = 0,00'],method:'idtr'},
   {id:'operation_description_unique',order:2,title:'Par contabilístico único',summary:'Fecha automaticamente um único débito e um único crédito que se explicam sem ambiguidade.',conditions:['Mesmo número de operação','Mesma descrição comparável; ANL- pode ser apenas o prefixo de anulação','Valor absoluto igual e sinais opostos','Exatamente uma linha de cada sinal'],method:'operation_description'},
-  {id:'operation_review',order:3,title:'Operação com soma zero',summary:'Cria uma proposta para confirmação técnica quando todas as parcelas da operação somam zero.',conditions:['Mesmo número de operação','Dois ou mais movimentos ainda abertos','Soma de MRVLR = 0,00','Linhas visíveis antes da decisão'],method:'operation'},
-  {id:'operation_description_review',order:4,title:'Operação e descrição comparável',summary:'No residual, cria uma proposta auditável por operação e descrição, tratando ANL- apenas como prefixo de comparação.',conditions:['Mesmo número de operação','Descrição comparável após retirar o prefixo inicial ANL-','Soma de MRVLR = 0,00','Confirmação humana quando existem várias parcelas'],method:'operation_description'},
+  {id:'operation_review',order:3,title:'Operação com soma zero',summary:'Cria uma proposta para confirmação técnica quando todas as parcelas da operação somam zero.',conditions:['Mesmo número de operação','Dois ou mais movimentos ainda abertos','Soma dos valores dos movimentos = 0,00','Linhas visíveis antes da decisão'],method:'operation'},
+  {id:'operation_description_review',order:4,title:'Operação e descrição comparável',summary:'No residual, cria uma proposta auditável por operação e descrição, tratando ANL- apenas como prefixo de comparação.',conditions:['Mesmo número de operação','Descrição comparável após retirar o prefixo inicial ANL-','Soma dos valores dos movimentos = 0,00','Confirmação humana quando existem várias parcelas'],method:'operation_description'},
 ] as const;
 
 export const accountingAssumptions=[
   ['Período contabilístico','É obtido dos dados do extrato; o nome do ficheiro nunca define datas.'],
-  ['MRVLR','É o valor original e imutável. Um contra valor, quando necessário, é calculado como −MRVLR.'],
+  ['Valor do movimento','É o valor original e imutável. Um contravalor, quando necessário, é calculado invertendo o respetivo sinal.'],
   ['Saldo contabilístico','A evolução recebida é validada movimento a movimento; divergências ficam como anomalias auditáveis.'],
   ['Data de sistema','É preservada para rastreabilidade, sem substituir o período contabilístico.'],
   ['Prazos D+','São contados em dias operacionais, excluindo sábado e domingo. O calendário de feriados fica explícito como configuração futura, não como regra presumida.'],

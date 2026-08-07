@@ -41,8 +41,8 @@ const reference26=(value:unknown)=>{
 
 export function normalizeMovementRow(raw:RawMovementRow):NormalizedMovement{
   const amountCents=cents(raw.amount),balanceCents=cents(raw.balance),systemDate=dateValue(raw.systemDate),accountingDate=dateValue(raw.accountingDate)??systemDate;
-  if(amountCents===null)throw new Error('MRVLR não contém um valor numérico válido.');
-  if(!accountingDate)throw new Error('MRDATL não contém uma data válida e não existe MRDTSIS utilizável.');
+  if(amountCents===null)throw new Error('O valor do movimento não contém um número válido.');
+  if(!accountingDate)throw new Error('O período contabilístico não contém uma data válida e não existe uma data de sistema utilizável.');
   return {systemDate,systemTime:timeValue(raw.systemTime),accountingDate,account:String(raw.account??'').trim(),amountCents,currency:String(raw.currency??'AOA').trim()||'AOA',operationNumber:String(raw.operationNumber??'').trim(),descriptionNormalized:normalizeHeader(raw.description),balanceCents,nativeIdtr:nativeIdtr(raw.complementaryInfo),reference26:reference26(raw.observations)};
 }
 
