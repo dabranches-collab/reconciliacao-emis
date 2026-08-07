@@ -107,7 +107,7 @@ nav button:disabled { cursor: not-allowed; opacity: .42; background: transparent
 .processing-metrics article.balance{background:linear-gradient(135deg,#9e3349,#db5965);border-color:#db5965}
 .processing-metrics article.total span,.processing-metrics article.good span,.processing-metrics article.idtr span,.processing-metrics article.balance span,
 .processing-metrics article.total strong,.processing-metrics article.good strong,.processing-metrics article.idtr strong,.processing-metrics article.balance strong{color:#fff}
-.processing-metrics article.warn span,.processing-metrics article.warn strong{color:#3f2b05}
+.processing-metrics article.warn span,.processing-metrics article.warn strong,.processing-metrics article.warn .metric-state-icon{color:#fff;text-shadow:0 1px 2px rgba(67,38,0,.35)}
 .processing-metrics article.total .metric-state-icon,.processing-metrics article.good .metric-state-icon,.processing-metrics article.idtr .metric-state-icon,.processing-metrics article.balance .metric-state-icon{color:#fff}
 .processing-metrics article.warn .metric-state-icon{color:#4d3506}
 .processing-metrics article.counting{box-shadow:0 8px 20px rgba(24,45,40,.12)}

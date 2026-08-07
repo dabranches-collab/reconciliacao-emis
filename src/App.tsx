@@ -53,9 +53,10 @@ import packageJson from "../package.json";
 import { demoResult } from "./demoData";
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./lib/supabase";
 import { runV2Import } from "./v2/runImport";
-import { loadLatestV2Dashboard } from "./v2/database";
+import { loadActiveV2Import, loadLatestV2Dashboard } from "./v2/database";
 import V2History from "./v2/V2History";
 import V2Movements from "./v2/V2Movements";
+import {V2Assumptions,V2MovementGuide} from "./v2/V2Reference";
 import V2Results from "./v2/V2Results";
 import type { V2Dashboard } from "./v2/database";
 
@@ -586,7 +587,7 @@ function ProcessingDashboard({
           <span><b>{progress.storedRows.toLocaleString('pt-AO')}</b> linhas preservadas</span>
           <span>Tentativa <b>{Math.max(1,progress.attempt??1)}</b></span>
           <span>Última atividade <b>{progress.heartbeatAt?new Date(progress.heartbeatAt).toLocaleTimeString('pt-AO',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'a confirmar'}</b></span>
-          <span>O processamento continua mesmo que feche esta página</span>
+          <span>{progress.percent >= 82 ? "O processamento continua mesmo que feche esta página" : "Mantenha esta página aberta durante a leitura; se for interrompida, selecione novamente o mesmo ficheiro para retomar"}</span>
         </div>
       )}
       <div className="processing-steps">
@@ -859,6 +860,10 @@ export default function App() {
   const [v2Dashboard,setV2Dashboard]=useState<V2Dashboard|null>(null);
   const [centralLoading,setCentralLoading]=useState(true);
   const [busy, setBusy] = useState(false);
+  useEffect(()=>{
+    document.body.dataset.appBusy=busy?'true':'false';
+    return()=>{delete document.body.dataset.appBusy};
+  },[busy]);
   const [progress, setProgress] = useState<AnalysisProgress>({
     percent: 0,
     stage: "A aguardar ficheiro",
@@ -927,6 +932,34 @@ export default function App() {
       active = false;
     };
   }, [identity.isDemo]);
+  useEffect(()=>{
+    if(identity.isDemo||!REALTIME_V2_ACTIVE)return;
+    let active=true,hadServerImport=false;
+    const sync=async()=>{
+      try{
+        const current=await loadActiveV2Import();if(!active)return;
+        if(current){
+          hadServerImport=true;setBusy(true);setProcessingFile(current.original_filename);setView('results');setError('');
+          const processed=Number(current.source_rows??0),inserted=Number(current.inserted_rows??0),live=current.live_stats,total=Number(live?.estimatedRows??processed);
+          setProgress(previous=>({...previous,
+            percent:Math.max(Number(current.progress)||0,previous.percent>81?previous.percent:0),
+            stage:current.stage||'Processamento em curso no servidor. Aguarde.',processed,total,
+            storedRows:inserted,unit:'linhas',heartbeatAt:current.heartbeat_at,
+            liveV2:live?{withNativeIdtr:Number(live.withNativeIdtr??0),withoutNativeIdtr:Number(live.withoutNativeIdtr??0),reference26:Number(live.reference26??0),amountCents:Number(live.amountCents??0),provisionalReconciled:Number(live.provisionalReconciled??0),duplicates:Number(current.duplicate_rows??0),rejected:Number(current.rejected_rows??0)}:previous.liveV2,
+            liveMovementTypes:live?.movementTypes??previous.liveMovementTypes,
+          }));
+          return;
+        }
+        if(hadServerImport){
+          hadServerImport=false;setBusy(false);
+          const dashboard=await loadLatestV2Dashboard();
+          if(active&&dashboard){setV2Dashboard(dashboard);setHistoryRevision(value=>value+1);setView('results');}
+        }
+      }catch(cause){if(active)setError(readableError(cause,'Não foi possível acompanhar a importação ativa.'));}
+    };
+    void sync();const timer=window.setInterval(()=>void sync(),3000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[identity.isDemo]);
   useEffect(()=>{
     if(identity.isDemo||recoverableImport?.processingStage!=='dashboard_summary')return;
     let active=true;
@@ -1178,7 +1211,7 @@ export default function App() {
               </p>
               <ul>
                 <li>Extratos Real Time</li>
-                <li>Reconciliação automática e manual</li>
+                <li>Reconciliação automática e auditável</li>
                 <li>Histórico e deteção de anomalias</li>
               </ul>
               <button
@@ -1483,22 +1516,10 @@ export default function App() {
           />
         )}
         {view === "guide" && <Guide />}
-        {view === "assumptions" && (
-          <section className="panel v2-reference-placeholder">
-            <p className="eyebrow">DOCUMENTAÇÃO OPERACIONAL</p>
-            <h2>Pressupostos da reconciliação</h2>
-            <p>Este menu fica permanentemente disponível. O detalhe gráfico das regras V2 será preenchido a partir da mesma configuração usada pelo motor, para não divergir do cálculo executado.</p>
-          </section>
-        )}
-        {view === "movement-guide" && (
-          <section className="panel v2-reference-placeholder">
-            <p className="eyebrow">AJUDA À OPERAÇÃO</p>
-            <h2>Instruções dos movimentos</h2>
-            <p>Este menu fica permanentemente disponível. Reunirá os filtros, prazos D+, carregamento progressivo e exportação da tabela com indicações visuais simples.</p>
-          </section>
-        )}
-        {view === "history" && (REALTIME_V2_ACTIVE?<V2History/>:<HistoryDashboard result={result} />)}
-        {view === "movements" && (REALTIME_V2_ACTIVE?<V2Movements/>:<DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />)}
+        {view === "assumptions" && <V2Assumptions/>}
+        {view === "movement-guide" && <V2MovementGuide/>}
+        {view === "history" && (REALTIME_V2_ACTIVE?<V2History revision={historyRevision}/>:<HistoryDashboard result={result} />)}
+        {view === "movements" && (REALTIME_V2_ACTIVE?<V2Movements revision={historyRevision}/>:<DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />)}
         {view === "users" && identity.canManageUsers && <UserManagement />}
         {view === "audit" && identity.canViewAudit && <AuditLogPanel />}
       </main>

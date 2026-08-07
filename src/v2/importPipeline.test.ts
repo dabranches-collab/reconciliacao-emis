@@ -12,6 +12,7 @@ describe('pipeline de importação V2',()=>{
     expect(result).toMatchObject({processed:2,inserted:1,duplicates:1,rejected:0,accountingAnomalies:0,rejectionSamples:[]});
     expect(persisted).toHaveLength(2);
     expect(progress.at(-1)?.stage).toBe('reconciling');
+    expect(progress.at(-1)?.movementTypes.transfer).toEqual({total:2,reconciled:2,unreconciled:0,missingIdtr:0});
   });
   it('importa e sinaliza uma rutura de MRSALD sem perder o movimento',async()=>{
     const result=await ingestRows(source([headers,row(100,1100,'1'),row(50,999,'2')]),{persist:async rows=>({inserted:rows.length,duplicates:0}),progress:async()=>{}},10);

@@ -169,10 +169,9 @@ computador. Quando os receber, deve confirmar a proveniência antes de os usar:
 - o nome do ficheiro nunca deve determinar datas, período ou regras;
 - cabeçalhos, datas e período devem ser descobertos exclusivamente pelo conteúdo.
 
-### 11.1 Pressupostos errados encontrados no importador atual
+### 11.1 Pressupostos errados encontrados no importador V1
 
-`src/lib/rawExtractParser.ts` depende atualmente de posições fixas do formato
-preparado:
+O importador V1 dependia de posições fixas do formato preparado:
 
 - `row[9]` como valor assinado, correspondente a uma coluna sem cabeçalho com
   fórmula semelhante a `=-MRVLR`;
@@ -181,13 +180,13 @@ preparado:
 - `MRDTSIS` é usado em partes do fluxo como data principal, embora o trabalho
   contabilístico deva ter como base o período/data contabilística de lançamento.
 
-Um importador corrigido deverá localizar colunas por cabeçalhos normalizados,
-nunca por posições, e não deverá exigir colunas auxiliares. O valor nativo é
+O importador V2 localiza colunas por cabeçalhos normalizados, nunca por posições,
+e não exige colunas auxiliares. O valor nativo é
 `MRVLR`; uma inversão de sinal, se realmente necessária, deve ser calculada pela
 aplicação. Somar `MRVLR` ou `-MRVLR` produz o mesmo teste de fecho a zero, mas os
 dois conceitos não devem ser confundidos com o efeito contabilístico no saldo.
 
-### 11.2 Datas e validação contabilística a implementar
+### 11.2 Datas e validação contabilística implementadas
 
 - A data/período contabilístico de lançamento deve ser o eixo principal de
   períodos, saldos, dashboards, reconciliação e idade das pendências.
@@ -201,14 +200,13 @@ dois conceitos não devem ser confundidos com o efeito contabilístico no saldo.
 - Se o ficheiro não satisfizer as invariantes contabilísticas, a importação deve
   falhar de forma explícita em vez de produzir resultados parciais silenciosos.
 
-### 11.3 IDTR e reconciliação secundária
+### 11.3 IDTR e reconciliação secundária validados
 
-A proveniência do IDTR ainda não está definitivamente estabelecida. Alguns
-ficheiros preparados apresentam `IDTR=...` na informação complementar, mas o
-utilizador suspeita que também possam ter sido alterados. Não fabricar IDTR nem
-copiar regras desses ficheiros até comparar com uma exportação original.
+Os ficheiros originais confirmaram o IDTR nativo na informação complementar e a
+referência `/26` em Observações nos movimentos sem IDTR. A aplicação preserva
+essa proveniência, não converte `/26` em IDTR e não fabrica identificadores.
 
-Regras candidatas, a validar nos originais:
+Regras determinísticas aplicadas:
 
 1. IDTR: mesmo identificador, pelo menos dois movimentos e soma contabilística
    exatamente igual a zero. Ter apenas o mesmo IDTR não basta.
@@ -252,27 +250,90 @@ As conclusões, o dicionário de aliases, as métricas e o método variável obs
 nos ficheiros BK estão documentados em
 `docs/ANALISE_EXTRATOS_ORIGINAIS.md`.
 
-O bloqueio deixou de ser a ausência de ficheiros originais. O bloqueio atual é a
-aprovação das regras determinísticas e dos critérios de desempate antes de mudar
-o importador ou a reconciliação. Não implementar nem publicar essas mudanças sem
-essa decisão.
+O bloqueio dos ficheiros originais e da aprovação das regras foi resolvido pelo
+utilizador. As regras implementadas estão centralizadas em
+`src/v2/reconciliationRules.ts`, visíveis nos menus Pressupostos e Instruções e
+versionadas em cada grupo de reconciliação.
 
-## 12. Estado V2 e backlog após 7 de agosto de 2026
+## 12. Estado da aplicação após 7 de agosto de 2026
 
-A versão `2.0.8` está publicada. A base contém 2.469.775 movimentos, dos quais
-2.215.734 reconciliados, 254.041 em aberto e 7 anomalias de sequência de saldo.
-A finalização incremental e o índice de consulta dos movimentos foram aplicados
-no Supabase. O próximo extrato deve ser usado prioritariamente para medir o tempo
-real da nova finalização; não misturar este teste com novas alterações visuais.
+A linha ativa é a versão `2.1.4`. O importador usa exclusivamente o formato
+original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
+valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
+blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
+interrompe a reconciliação.
 
-Backlog funcional e visual, a retomar depois do teste de desempenho:
+### 12.1 Importações centrais
 
-- mostrar saldo dos movimentos em aberto com fronteira inicial incluída,
-  impacto da fronteira e saldo ajustado sem fronteira;
-- tornar o cartão das 7 anomalias clicável, com data, operação, MRVLR, MRSALD
-  recebido e saldo esperado;
-- completar os conteúdos de Pressupostos e Instruções;
-- concluir gestão de utilizadores, níveis administrativos e log central;
-- auditar filtros, carregamento integral e exportações Excel/PDF;
-- rever responsividade e tema escuro em todos os menus;
-- validar instalação e navegação PWA em iPhone e Windows.
+Foram concluídos, por período contabilístico, os oito extratos de 1 de julho a
+5 de agosto de 2026. A série contém 4.427.932 movimentos: 4.226.096
+reconciliados e 201.836 em aberto. O último extrato, de 31 de julho a 5 de
+agosto, contém 768.925 movimentos, dos quais 673.915 ficaram reconciliados e
+95.010 em aberto; não teve rejeições, duplicados nem anomalias de saldo.
+
+Na auditoria após esse fecho surgiu um IDTR já reconciliado que voltou a aparecer
+num extrato posterior. O par anterior (+20.880 / -20.880) continuava correto e o
+novo movimento (-20.880) ficou em aberto. Não se dissolve um grupo anterior
+que soma zero só porque o identificador reapareceu; o novo conjunto só fecha se
+as parcelas disponíveis voltarem a somar zero. Não existem chaves IDTR com dois
+grupos de reconciliação na série atual.
+
+### 12.2 Garantias do processo
+
+- O histórico só apresenta `Concluída` depois de ingestão, reconciliação,
+  métricas e saldos terminarem.
+- Cada importação tem um identificador de workflow determinístico. Uma repetição
+  retoma a mesma execução e não cria duas reconciliações concorrentes.
+- A passagem entre execuções guarda apenas dados serializáveis; nunca devolve o
+  objeto interno de uma instância Cloudflare.
+- Os buckets de reconciliação são sequenciais. O ensaio em paralelo provocava
+  `lock_timeout` nas tabelas de candidatos e era mais lento apesar da aparência
+  de paralelismo.
+- O progresso provisório é guardado em `rt_v2_imports.live_stats`, permitindo a
+  recuperação do mesmo ecrã noutro separador ou após refresh.
+- A partir da 2.1.3, as contagens por tipo de movimento também ficam em
+  `live_stats`; os cartões continuam preenchidos depois de refresh ou troca de
+  browser. A reconciliação provisória por IDTR atualiza esses cartões sem uma
+  segunda passagem pelo ficheiro.
+- A conclusão produz exatamente um registo `v2_import_completed` no log central.
+- As importações novas usam 128 buckets IDTR e 64 secundários. Ao concluir, um
+  trigger elimina apenas candidatos técnicos temporários, reduzindo o custo de
+  I/O das execuções seguintes.
+- Pendências, montantes, IDTR, métodos e anomalias ficam agregados nas métricas
+  diárias. Os widgets, gráficos e saldo final deixam de percorrer milhões de
+  movimentos em cada importação; os valores da cache foram conferidos contra a
+  série integral e coincidem exatamente.
+
+### 12.3 Funcionalidade já ligada
+
+- resultados compactos por movimentos, antiguidade e prazo de reconciliação;
+- saldo bruto, impacto da fronteira inicial e saldo ajustado, com representação
+  divergente positiva/negativa;
+- detalhe clicável das anomalias de sequência contabilística;
+- gráfico com calendário corrido, fins de semana compactados, lacunas visíveis e
+  seleção diária, semanal, mensal ou anual;
+- histórico ordenado por período contabilístico;
+- Movimentos aberto por defeito nos pendentes, com totais centrais, ordenação,
+  datas, seleção de colunas, carregamento progressivo e exportação filtrada para
+  Excel ou PDF horizontal;
+- atalhos cumulativos de antiguidade: próprio dia, pelo menos 1, 2 ou 3 dias e
+  todos os pendentes;
+- menus Pressupostos e Instruções alimentados pela mesma versão das regras;
+- gestão de utilizadores e separação entre administrador de cliente e
+  proprietário com acesso ao log central;
+- PWA para Windows/iPhone, verificação de versão após 15 minutos de inatividade,
+  tema claro/escuro e navegação móvel fixa.
+
+### 12.4 Operação e recuperação
+
+Durante a leitura local do XLSX, manter o separador aberto: é o browser que lê e
+envia os lotes. Assim que o ecrã indicar “Processamento em curso no servidor”, a
+ingestão terminou e o workflow é durável. O botão de atualizar consulta novamente
+Supabase sem mudar de menu. Nunca apagar uma importação em `reconciling` apenas
+por a percentagem demorar; verificar primeiro `heartbeat_at`, o workflow e os
+logs Postgres.
+
+No computador novo, procurar primeiro `C:\Projetos\reconciliacao-emis` e validar
+que contém `.git`. Se não existir, perguntar ao utilizador onde criar a pasta
+local no disco C:, clonar o remoto oficial e só depois instalar dependências.
+Nunca trabalhar no clone do OneDrive nem copiar extratos para o repositório.

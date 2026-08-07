@@ -20,6 +20,11 @@
       "name": "reconciliacao-emis-import-finalization",
       "binding": "IMPORT_FINALIZATION",
       "class_name": "ImportFinalizationWorkflow"
+    },
+    {
+      "name": "reconciliacao-emis-v2-finalization",
+      "binding": "V2_IMPORT_FINALIZATION",
+      "class_name": "V2FinalizationWorkflow"
     }
   ],
   "vars": {

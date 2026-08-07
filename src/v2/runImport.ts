@@ -3,6 +3,7 @@ import {createV2ImportSink,finalizeV2Import,loadV2Dashboard,loadV2ImportState,pr
 import {ingestRows} from './importPipeline';
 import {estimateXlsxRows,streamXlsxRows} from './xlsxRowStream';
 import {resolveExtractHeaders} from './extractSchema';
+import type {LiveMovementTypeCounts} from './importPipeline';
 
 const sha256=async(buffer:ArrayBuffer)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(value=>value.toString(16).padStart(2,'0')).join('');
 const wait=(milliseconds:number)=>new Promise(resolve=>window.setTimeout(resolve,milliseconds));
@@ -15,11 +16,11 @@ const centralProgress=(percent:number,stage:string,processed:number,inserted:num
 });
 
 async function waitForCentralCompletion(importId:string,onProgress:(progress:AnalysisProgress)=>void,liveV2:LiveV2){
-  for(let attempt=0;attempt<300;attempt++){
+  for(let attempt=0;attempt<3600;attempt++){
     const state=await loadV2ImportState(importId);
     if(state.state==='completed')return;
     if(state.state==='failed')throw new Error(state.error_message||'A reconciliação central falhou.');
-    onProgress(centralProgress(Math.max(82,Number(state.progress)||82),'Processamento em curso no servidor. Aguarde.',state.source_rows,state.inserted_rows,liveV2));
+    onProgress(centralProgress(Math.max(82,Number(state.progress)||82),state.stage||'Processamento em curso no servidor. Aguarde.',state.source_rows,state.inserted_rows,liveV2));
     await wait(2000);
   }
   throw new Error('A reconciliação continua no servidor. Consulte o Histórico para acompanhar a conclusão.');
@@ -47,22 +48,21 @@ export async function runV2Import(file:File,onProgress:(progress:AnalysisProgres
   const prepared=await prepareV2Import(file,hash);
   if(prepared.duplicate){const dashboard=await loadV2Dashboard(prepared.context.seriesId);return {dashboard,duplicate:true,context:prepared.context};}
   let lastLiveV2:LiveV2={withNativeIdtr:0,withoutNativeIdtr:0,reference26:0,amountCents:0,duplicates:0,rejected:0,provisionalReconciled:0};
+  let lastMovementTypes={} as LiveMovementTypeCounts;
   const sink=createV2ImportSink(prepared.context,value=>{
+    lastMovementTypes=value.movementTypes;
     lastLiveV2={withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected,provisionalReconciled:value.provisionalReconciled};
     const ratio=value.processed/estimatedRows,percent=value.stage==='validating'?3:value.stage==='ingesting'?Math.min(78,5+Math.round(ratio*73)):value.stage==='reconciling'?82:value.stage==='failed'?0:100;
-    onProgress({percent,stage:value.message,processed:value.processed,total:estimatedRows,unit:'linhas',storedRows:value.inserted,liveTotals:{movements:value.processed,automatic:value.provisionalReconciled,unreconciled:Math.max(0,value.processed-value.provisionalReconciled),missingIdtr:value.withoutNativeIdtr},liveV2:{withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected,provisionalReconciled:value.provisionalReconciled}});
-  });
+    onProgress({percent,stage:value.message,processed:value.processed,total:estimatedRows,unit:'linhas',storedRows:value.inserted,liveTotals:{movements:value.processed,automatic:value.provisionalReconciled,unreconciled:Math.max(0,value.processed-value.provisionalReconciled),missingIdtr:value.withoutNativeIdtr},liveMovementTypes:value.movementTypes,liveV2:{withNativeIdtr:value.withNativeIdtr,withoutNativeIdtr:value.withoutNativeIdtr,reference26:value.reference26,amountCents:value.amountCents,duplicates:value.duplicates,rejected:value.rejected,provisionalReconciled:value.provisionalReconciled}});
+  },estimatedRows);
   let processed=0,inserted=0,duplicates=0,rejected=0;
   try{
-    const ingestion=await ingestRows(streamXlsxRows(buffer),sink,1000);
+    const ingestion=await ingestRows(streamXlsxRows(buffer),sink,2000);
     ({processed,inserted,duplicates,rejected}=ingestion);
     onProgress(centralProgress(82,'Processamento em curso no servidor. Aguarde.',ingestion.processed,ingestion.inserted,lastLiveV2));
-    try{
-      await finalizeV2Import(prepared.context);
-    }catch{
-      onProgress(centralProgress(88,'Processamento em curso no servidor. Aguarde.',ingestion.processed,ingestion.inserted,lastLiveV2));
-      await waitForCentralCompletion(prepared.context.importId,onProgress,lastLiveV2);
-    }
+    await finalizeV2Import(prepared.context);
+    onProgress(centralProgress(82,'Processamento em curso no servidor. Aguarde.',ingestion.processed,ingestion.inserted,lastLiveV2));
+    await waitForCentralCompletion(prepared.context.importId,onProgress,lastLiveV2);
     onProgress(centralProgress(100,'Análise concluída.',ingestion.processed,ingestion.inserted,lastLiveV2));
     const dashboard=await loadCompletedDashboard(prepared.context.seriesId);
     return {dashboard,duplicate:false,context:prepared.context,ingestion};
@@ -70,7 +70,7 @@ export async function runV2Import(file:File,onProgress:(progress:AnalysisProgres
     const message=cause instanceof Error?cause.message:'Falha inesperada durante a importação V2.';
     try{
       const current=await loadV2ImportState(prepared.context.importId);
-      if(current.state!=='completed')await sink.progress({...lastLiveV2,stage:'failed',processed,inserted,duplicates,rejected,message});
+      if(current.state!=='completed')await sink.progress({...lastLiveV2,stage:'failed',processed,inserted,duplicates,rejected,message,movementTypes:lastMovementTypes});
     }catch{/* Preservar o erro original. */}
     throw cause;
   }

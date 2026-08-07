@@ -22,8 +22,7 @@ export type ReconciliationOutcome = {
   groups: ReconciledGroup[];
   openMovementIds: string[];
 };
-
-const RULE_VERSION = 'rt-v2.0.0';
+import {reconciliationRuleVersion as RULE_VERSION} from './reconciliationRules';
 
 const groupBy = <T>(rows: T[], keyOf: (row: T) => string | null) => {
   const groups = new Map<string, T[]>();
