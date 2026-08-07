@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.1.7`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.1.8`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -323,6 +323,13 @@ grupos de reconciliação na série atual.
   proprietário com acesso ao log central;
 - PWA para Windows/iPhone, verificação de versão após 15 minutos de inatividade,
   tema claro/escuro e navegação móvel fixa.
+- No iPhone, a navegação usa um botão fixo no canto superior esquerdo e abre um
+  painel vertical deslocável, mantendo os submenus visíveis e fechando após a
+  seleção. As exportações XLSX guardam datas como datas e montantes/saldos como
+  números com formatação contabilística.
+- Em 7 de agosto de 2026, os dados operacionais V1 foram eliminados e a respetiva
+  tabela de movimentos ficou vazia. A V2 foi preservada integralmente. Na gestão
+  de acessos ficou apenas a conta protegida do proprietário da plataforma.
 
 ### 12.4 Operação e recuperação
 

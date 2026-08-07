@@ -17,6 +17,7 @@ import {
   Info,
   Landmark,
   LogOut,
+  Menu,
   Moon,
   ReceiptText,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
   Upload,
   Users,
   Wrench,
+  X,
 } from "lucide-react";
 import type { AnalysisResult } from "./types";
 import { analyzeWorkbook, type AnalysisProgress } from "./lib/excel";
@@ -856,6 +858,9 @@ export default function App() {
       ? saved
       : "import";
   });
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const selectView=(next:View)=>{setView(next);setMobileMenuOpen(false)};
+  useEffect(()=>{if(!mobileMenuOpen)return;const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setMobileMenuOpen(false)};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close)},[mobileMenuOpen]);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [v2Dashboard,setV2Dashboard]=useState<V2Dashboard|null>(null);
   const [centralLoading,setCentralLoading]=useState(true);
@@ -1282,7 +1287,9 @@ export default function App() {
     );
   return (
     <div className="app-shell">
-      <aside>
+      <button className="mobile-menu-toggle" type="button" aria-label={mobileMenuOpen?'Fechar menu':'Abrir menu'} aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>{mobileMenuOpen?<X size={22}/>:<Menu size={22}/>}</button>
+      {mobileMenuOpen&&<button className="mobile-nav-backdrop" type="button" aria-label="Fechar menu" onClick={()=>setMobileMenuOpen(false)}/>}
+      <aside className={mobileMenuOpen?'mobile-open':''}>
         <div className="brand">
           <img
             className="keve-logo sidebar-logo"
@@ -1301,41 +1308,41 @@ export default function App() {
         <nav>
           <button
             className={view === "guide" ? "active" : ""}
-            onClick={() => setView("guide")}
+            onClick={() => selectView("guide")}
           >
             <BookOpen size={19} />
             Como funciona
           </button>
           <button
             className={`nav-submenu ${view === "assumptions" ? "active" : ""}`}
-            onClick={() => setView("assumptions")}
+            onClick={() => selectView("assumptions")}
           >
             Pressupostos
           </button>
           <button
             className={view === "results" ? "active" : ""}
             title="Abrir o último dashboard de resultados"
-            onClick={() => setView("results")}
+            onClick={() => selectView("results")}
           >
             <BarChart3 size={19} />
             Resultados
           </button>
           <button
             className={view === "movements" ? "active" : ""}
-            onClick={() => setView("movements")}
+            onClick={() => selectView("movements")}
           >
             <FileSpreadsheet size={19} />
             Movimentos
           </button>
           <button
             className={`nav-submenu ${view === "movement-guide" ? "active" : ""}`}
-            onClick={() => setView("movement-guide")}
+            onClick={() => selectView("movement-guide")}
           >
             Instruções
           </button>
           <button
             className={view === "history" ? "active" : ""}
-            onClick={() => setView("history")}
+            onClick={() => selectView("history")}
           >
             <History size={19} />
             Histórico
@@ -1343,7 +1350,7 @@ export default function App() {
           {identity.canManageUsers && (
             <button
               className={view === "users" ? "active" : ""}
-              onClick={() => setView("users")}
+              onClick={() => selectView("users")}
             >
               <Users size={19} />
               Utilizadores
@@ -1352,7 +1359,7 @@ export default function App() {
           {identity.canViewAudit && (
             <button
               className={view === "audit" ? "active" : ""}
-              onClick={() => setView("audit")}
+              onClick={() => selectView("audit")}
             >
               <Activity size={19} />
               Auditoria
@@ -1362,7 +1369,7 @@ export default function App() {
             className={`nav-import ${view === "import" ? "active" : ""}`}
             disabled={identity.isDemo}
             title={identity.isDemo ? "Indisponível no modo de demonstração" : undefined}
-            onClick={() => setView("import")}
+            onClick={() => selectView("import")}
           >
             <Upload size={19} />
             Importar ficheiro
