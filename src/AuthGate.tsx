@@ -142,7 +142,10 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         </div>
         <div className="accounting-orbit">
           <div className="orbit-ring ring-one"/><div className="orbit-ring ring-two"/>
-          <span className="flow-token debit">−</span><span className="flow-token credit">+</span>
+          <svg className="orbit-tokens" viewBox="0 0 340 250" aria-hidden="true">
+            <g className="flow-token debit"><circle r="15"/><text textAnchor="middle" dominantBaseline="central">−</text><animateMotion dur="5s" repeatCount="indefinite" path="M170 0 A125 125 0 1 1 169.9 0"/></g>
+            <g className="flow-token credit"><circle r="15"/><text textAnchor="middle" dominantBaseline="central">+</text><animateMotion dur="6.5s" repeatCount="indefinite" path="M340 125 A170 90 0 1 0 0 125 A170 90 0 1 0 340 125"/></g>
+          </svg>
           <div className="orbit-centre"><ArrowLeftRight/><strong>0,00</strong><small>SALDO RECONCILIADO</small></div>
           <div className="ledger-chip chip-debit"><CircleDollarSign/><span>DÉBITO</span><strong>− 2 450 000</strong></div>
           <div className="ledger-chip chip-credit"><CircleDollarSign/><span>CRÉDITO</span><strong>+ 2 450 000</strong></div>
