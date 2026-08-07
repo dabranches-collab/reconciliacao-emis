@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.5.0`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.6.0`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -360,6 +360,15 @@ grupos de reconciliação na série atual.
 - A 2.5.0 aumentou os cartões principais de Resultados e passou a mostrar os
   saldos financeiros já agregados: saldo líquido total, saldo balanceado dos
   reconciliados e saldo bruto dos movimentos ainda em aberto.
+- A 2.6.0 acrescenta o menu Confirmações e formaliza a cascata contabilística
+  verificada nos ficheiros BK. IDTR com soma zero e pares únicos por operação,
+  descrição e valor simétrico permanecem automáticos e consultáveis. Grupos
+  secundários por operação ou por operação e descrição comparável são propostas
+  auditáveis: o técnico vê todas as linhas, pode aprovar/rejeitar individualmente
+  ou em lote, e a base volta a validar linhas abertas e saldo zero antes do fecho.
+  A aplicação inicial da regra fechou 18.738 pares únicos (37.476 movimentos) e
+  deixou 1.358 propostas para validação, correspondentes a 2.998 movimentos. O
+  dashboard ficou com 4.411.318 reconciliados e 162.879 em aberto.
 
 ### 12.4 Operação e recuperação
 

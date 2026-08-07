@@ -1,4 +1,4 @@
-export type ReconciliationMethod = 'idtr' | 'operation_description' | 'reference_26';
+export type ReconciliationMethod = 'idtr' | 'operation' | 'operation_description' | 'reference_26';
 
 export type CandidateMovement = {
   id: string;

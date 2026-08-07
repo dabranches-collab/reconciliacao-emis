@@ -15,6 +15,7 @@ import {
   History,
   Info,
   Landmark,
+  ListChecks,
   LogOut,
   Menu,
   Moon,
@@ -59,6 +60,7 @@ import V2History from "./v2/V2History";
 import V2Movements from "./v2/V2Movements";
 import {V2Assumptions,V2MovementGuide} from "./v2/V2Reference";
 import V2Results from "./v2/V2Results";
+import V2ReconciliationReview from "./v2/V2ReconciliationReview";
 import type { V2Dashboard } from "./v2/database";
 
 const money = new Intl.NumberFormat("pt-AO", {
@@ -835,6 +837,7 @@ export default function App() {
     | "import"
     | "results"
     | "movements"
+    | "confirmations"
     | "guide"
     | "assumptions"
     | "movement-guide"
@@ -849,6 +852,7 @@ export default function App() {
     return saved === "import" ||
       saved === "results" ||
       saved === "movements" ||
+      saved === "confirmations" ||
       saved === "guide" ||
       saved === "assumptions" ||
       saved === "movement-guide" ||
@@ -1142,6 +1146,8 @@ export default function App() {
         ? "Resultados da reconciliação"
         : view === "movements"
           ? "Consulta e extração de movimentos"
+          : view === "confirmations"
+            ? "Confirmação de reconciliações"
           : view === "guide"
             ? "Como funciona"
             : view === "assumptions"
@@ -1160,6 +1166,8 @@ export default function App() {
         ? "Consulte os resultados e exceções identificadas."
         : view === "movements"
           ? "Filtre, ordene e extraia os movimentos disponíveis em Excel ou PDF."
+          : view === "confirmations"
+            ? "Valide propostas contabilísticas, consulte as linhas associadas e mantenha um histórico auditável."
           : view === "guide"
             ? "Compreenda o ciclo, as regras e o impacto da data escolhida."
             : view === "assumptions"
@@ -1335,6 +1343,13 @@ export default function App() {
           >
             <FileSpreadsheet size={19} />
             Movimentos
+          </button>
+          <button
+            className={`nav-submenu nav-confirmations ${view === "confirmations" ? "active" : ""}`}
+            onClick={() => selectView("confirmations")}
+          >
+            <ListChecks size={17} />
+            Confirmações
           </button>
           <button
             className={`nav-submenu ${view === "movement-guide" ? "active" : ""}`}
@@ -1529,6 +1544,7 @@ export default function App() {
         {view === "movement-guide" && <V2MovementGuide/>}
         {view === "history" && (REALTIME_V2_ACTIVE?<V2History revision={historyRevision}/>:<HistoryDashboard result={result} />)}
         {view === "movements" && (REALTIME_V2_ACTIVE?<V2Movements revision={historyRevision}/>:<DataExplorer result={result} onImport={() => setView("import")} isDemo={identity.isDemo} />)}
+        {view === "confirmations" && <V2ReconciliationReview canReview={!identity.isDemo&&identity.role!=="auditor"}/>}
         {view === "users" && identity.canManageUsers && <UserManagement />}
         {view === "audit" && identity.canViewAudit && <AuditLogPanel />}
       </main>
