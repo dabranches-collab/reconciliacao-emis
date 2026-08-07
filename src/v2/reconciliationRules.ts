@@ -2,7 +2,7 @@ export const reconciliationRuleVersion='rt-v2.1.0';
 
 export const openAgeDefinitions={
   current:'D+0 a D+7: movimentos ainda dentro da janela operacional corrente.',
-  historical:'D+8 ou mais: movimentos antigos que continuam sem contrapartida, sem contar a fronteira inicial.',
+  historical:'D+8 ou mais: movimentos antigos que continuam sem contrapartida.',
 } as const;
 
 export const reconciliationRules=[
@@ -18,7 +18,7 @@ export const accountingAssumptions=[
   ['Saldo contabilístico','A evolução recebida é validada movimento a movimento; divergências ficam como anomalias auditáveis.'],
   ['Data de sistema','É preservada para rastreabilidade, sem substituir o período contabilístico.'],
   ['Prazos D+','São contados em dias operacionais, excluindo sábado e domingo. O calendário de feriados fica explícito como configuração futura, não como regra presumida.'],
-  ['Fronteira inicial','Pode excluir-se do saldo ajustado o efeito de movimentos cujo início é anterior ao primeiro extrato disponível.'],
+  ['Início da série','Estar no primeiro período disponível não permite excluir um movimento: os ficheiros operacionais transportam pendências antigas até serem reconciliadas.'],
   ['Abertos atuais e históricos',`${openAgeDefinitions.current} ${openAgeDefinitions.historical}`],
   ['Janela operacional','Todos os movimentos por reconciliar permanecem ativos. As reconciliações dos últimos 7 dias ficam na janela operacional; as anteriores permanecem disponíveis no histórico, nas métricas e nos grupos agregados, sem voltarem a entrar no motor.'],
   ['Confirmação técnica','Só chegam ao menu Confirmações propostas secundárias que não sejam explicadas por um único IDTR. Se todas as linhas tiverem o mesmo IDTR e saldo zero, fecham automaticamente. A aprovação individual ou em lote volta a validar que as restantes linhas estão abertas e que o saldo continua exatamente em zero.'],

@@ -388,3 +388,20 @@ No computador novo, procurar primeiro `C:\Projetos\reconciliacao-emis` e validar
 que contém `.git`. Se não existir, perguntar ao utilizador onde criar a pasta
 local no disco C:, clonar o remoto oficial e só depois instalar dependências.
 Nunca trabalhar no clone do OneDrive nem copiar extratos para o repositório.
+
+### 12.5 Correção da fronteira inicial (pendente de aplicação)
+
+A comparação do ficheiro manual `BK_Real Time EMIS_Mov 15 a 22 de Julho
+2026.xlsx` demonstrou que o primeiro período disponível não identifica, por si
+só, fechos sem abertura. O separador `REAL TIME` contém 86.647 pendências, das
+quais 2.103 são anteriores a 15 de julho e a mais antiga data de 3 de outubro
+de 2025. O separador `REC` contém 59.188 movimentos anteriores a 15 de julho
+que foram usados em reconciliações posteriores.
+
+Consequentemente, nenhum movimento pode ser excluído automaticamente apenas por
+pertencer ao primeiro dia da série. A migração
+`20260807220000_stop_assuming_first_day_boundary.sql` normaliza a fronteira
+automática para zero e recalcula os resultados derivados existentes sem reler
+os ficheiros. Uma futura identificação de fechos sem abertura exigirá um
+critério contabilístico verificável e auditável; não deve ser inferida apenas
+pela data ou pelo sinal do movimento.
