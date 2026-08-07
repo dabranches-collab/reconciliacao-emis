@@ -44,3 +44,18 @@
 .v2-open-definitions{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.v2-open-definitions span{padding:4px 7px;border-radius:7px;background:#eef4f1;color:#53635e;font-size:9px;line-height:1.35}.v2-open-definitions b{margin-right:4px;color:#263d36}.v2-open-definitions span:last-child{background:#fff0f1;color:#7e3a42}.v2-open-definitions span:last-child b{color:#a52f3d}:root[data-theme='dark'] .v2-open-definitions span{background:#45534f;color:#d2ded9}:root[data-theme='dark'] .v2-open-definitions b{color:#f0f7f4}:root[data-theme='dark'] .v2-open-definitions span:last-child{background:#5a3e42;color:#ffd9dd}:root[data-theme='dark'] .v2-open-definitions span:last-child b{color:#ffb7bf}
 .v2-anomaly-main-row{cursor:pointer;transition:background .15s ease}.v2-anomaly-main-row:hover,.v2-anomaly-main-row:focus-visible,.v2-anomaly-main-row.expanded{background:#fff2f3;outline:none}.v2-anomaly-main-row td:first-child{white-space:nowrap}.v2-anomaly-expander{display:inline-grid;place-items:center;width:22px;margin-right:5px;vertical-align:middle;color:#b83242}.v2-anomaly-context-row{background:#f5f8f7;color:#34443f}.v2-anomaly-context-row td{border-bottom-color:#e1e9e6}.v2-anomaly-context-row td:first-child{padding-left:30px}.v2-context-indent{display:flex;align-items:center;gap:7px;margin-bottom:3px;color:#587069;font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}.v2-context-indent i{width:13px;height:9px;border-left:2px solid #9aaba6;border-bottom:2px solid #9aaba6;border-radius:0 0 0 3px}.v2-anomaly-context-row td:nth-child(3) small{display:block;margin-top:3px;color:#6b7a75;font-size:9px}.v2-anomaly-context-message td{padding:11px 30px!important;background:#f7faf9;color:#61716c;font-size:11px}.v2-anomaly-context-message svg{vertical-align:middle;margin-right:6px}.spin{animation:v2-spin .8s linear infinite}@keyframes v2-spin{to{transform:rotate(360deg)}}
 :root[data-theme='dark'] .v2-anomaly-main-row:hover,:root[data-theme='dark'] .v2-anomaly-main-row:focus-visible,:root[data-theme='dark'] .v2-anomaly-main-row.expanded{background:#594044}:root[data-theme='dark'] .v2-anomaly-context-row{background:#34413e;color:#edf6f3}:root[data-theme='dark'] .v2-anomaly-context-row td{border-bottom-color:#53635f}:root[data-theme='dark'] .v2-context-indent{color:#b9ccc6}:root[data-theme='dark'] .v2-context-indent i{border-color:#7e9890}:root[data-theme='dark'] .v2-anomaly-context-row td:nth-child(3) small,:root[data-theme='dark'] .v2-anomaly-context-message td{color:#c7d6d1}:root[data-theme='dark'] .v2-anomaly-context-message td{background:#303d39}
+
+/* Saldos financeiros legíveis e separados das contagens operacionais. */
+.v2-main-metrics .v2-kpi { min-height: 166px; }
+.v2-main-metrics .v2-kpi:not(.balance) .v2-kpi-detail { font-size: 10px; }
+.v2-main-metrics .v2-kpi:not(.balance) .v2-kpi-detail b {
+  margin-top: 7px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 7px;
+  background: rgba(0,0,0,.12);
+  font-size: clamp(9px,.72vw,12px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  white-space: normal;
+}

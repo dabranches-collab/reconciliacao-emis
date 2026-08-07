@@ -5,7 +5,7 @@ import {openAgeDefinitions} from './reconciliationRules';
 import './v2-results.css';
 
 const number=(value:unknown)=>Number(value??0);
-const money=(value:number)=>value.toLocaleString('pt-AO',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=(value:number)=>`${value.toLocaleString('pt-AO',{minimumFractionDigits:2,maximumFractionDigits:2})}\u00a0Kz`;
 export default function V2Results({dashboard}:{dashboard:V2Dashboard}){
   const [excludeOpening,setExcludeOpening]=useState(true),[anomalies,setAnomalies]=useState<V2BalanceAnomaly[]|null>(null),[anomalyError,setAnomalyError]=useState(''),[loadingAnomalies,setLoadingAnomalies]=useState(false),[missingDays,setMissingDays]=useState<string[]>([]),[showMissing,setShowMissing]=useState(false);
   const [expandedAnomaly,setExpandedAnomaly]=useState<number|null>(null),[anomalyContexts,setAnomalyContexts]=useState<Record<number,V2BalanceAnomalyContext>>({}),[contextLoading,setContextLoading]=useState<number|null>(null),[contextErrors,setContextErrors]=useState<Record<number,string>>({});
