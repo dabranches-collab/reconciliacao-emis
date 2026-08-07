@@ -1,0 +1,14 @@
+.confirmation-movement small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1050px) {
+  .confirmation-movement small {
+    display: block;
+    grid-column: 1 / -1;
+  }
+}
