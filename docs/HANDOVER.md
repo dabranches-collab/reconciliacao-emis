@@ -333,6 +333,12 @@ grupos de reconciliação na série atual.
 - A 2.1.9 fez uma auditoria de contraste em modo escuro aos nove ecrãs do Real
   Time e definiu cores explícitas para administração, tabelas, estados, guia,
   resultados e movimentos, evitando texto herdado sobre fundos claros.
+- A 2.2.0 passou a distinguir explicitamente movimentos abertos atuais (D+0 a
+  D+7) de históricos (D+8 ou mais), mantendo a fronteira inicial separada. O
+  detalhe das anomalias expande na própria tabela e mostra os movimentos
+  imediatamente anterior e seguinte da mesma importação, conta e moeda. O
+  índice composto `rt_v2_movements_balance_sequence_lookup_idx` suporta esta
+  consulta sem percorrer a tabela integral.
 
 ### 12.4 Operação e recuperação
 

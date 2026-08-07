@@ -5,7 +5,9 @@ export type V2ImportContext={seriesId:string;importId:string};
 export type V2Dashboard={state:'pending'|'processing'|'completed'|'failed';ruleVersion:string;calculatedAt:string|null;result:Record<string,unknown>|null;error:string|null};
 export type V2LiveStats={withNativeIdtr:number;withoutNativeIdtr:number;reference26:number;amountCents:number;provisionalReconciled:number;estimatedRows:number;movementTypes:LiveMovementTypeCounts};
 export type ActiveV2Import={id:string;original_filename:string;state:string;stage:string;progress:number;error_message:string|null;source_rows:number;inserted_rows:number;duplicate_rows:number;rejected_rows:number;heartbeat_at:string|null;live_stats:Partial<V2LiveStats>|null};
-export type V2BalanceAnomaly={id:number;accounting_date:string;operation_number:string|null;amount:number;balance:number|null;expected_balance:number|null;raw_description:string|null};
+export type V2BalanceAnomaly={id:number;series_id:string;import_id:string;source_row:number;accounting_date:string;system_date:string|null;system_time:string|null;account:string;currency:string;operation_number:string|null;amount:number;balance:number|null;expected_balance:number|null;raw_description:string|null;native_idtr:string|null;reference_26:string|null;status:string;reconciliation_method:string|null};
+export type V2BalanceContextMovement=Pick<V2BalanceAnomaly,'id'|'source_row'|'accounting_date'|'system_date'|'system_time'|'operation_number'|'amount'|'balance'|'raw_description'|'native_idtr'|'reference_26'|'status'|'reconciliation_method'>;
+export type V2BalanceAnomalyContext={previous:V2BalanceContextMovement|null;next:V2BalanceContextMovement|null};
 const cleanServerStage=(value:unknown)=>String(value??'').replace(/\u00e2\u20ac\u201d/g,'-');
 let cachedSeriesId:string|null=null;
 async function loadSeriesId(){
@@ -98,9 +100,21 @@ export async function loadLatestV2Dashboard():Promise<V2Dashboard|null>{
 }
 
 export async function loadV2BalanceAnomalies(limit=50):Promise<V2BalanceAnomaly[]>{
-  const query=await supabase.from('rt_v2_movements').select('id,accounting_date,operation_number,amount,balance,expected_balance,raw_description').eq('balance_sequence_valid',false).order('accounting_date',{ascending:true}).order('id',{ascending:true}).limit(limit);
+  const seriesId=await loadSeriesId();if(!seriesId)return[];
+  const query=await supabase.from('rt_v2_movements').select('id,series_id,import_id,source_row,accounting_date,system_date,system_time,account,currency,operation_number,amount,balance,expected_balance,raw_description,native_idtr,reference_26,status,reconciliation_method').eq('series_id',seriesId).eq('balance_sequence_valid',false).order('accounting_date',{ascending:true}).order('id',{ascending:true}).limit(limit);
   if(query.error)throw query.error;
   return (query.data??[]) as V2BalanceAnomaly[];
+}
+
+export async function loadV2BalanceAnomalyContext(anomaly:V2BalanceAnomaly):Promise<V2BalanceAnomalyContext>{
+  const columns='id,source_row,accounting_date,system_date,system_time,operation_number,amount,balance,raw_description,native_idtr,reference_26,status,reconciliation_method';
+  const base=()=>supabase.from('rt_v2_movements').select(columns).eq('series_id',anomaly.series_id).eq('import_id',anomaly.import_id).eq('account',anomaly.account).eq('currency',anomaly.currency);
+  const [previous,next]=await Promise.all([
+    base().lt('source_row',anomaly.source_row).order('source_row',{ascending:false}).limit(1).maybeSingle(),
+    base().gt('source_row',anomaly.source_row).order('source_row',{ascending:true}).limit(1).maybeSingle(),
+  ]);
+  if(previous.error)throw previous.error;if(next.error)throw next.error;
+  return {previous:previous.data as V2BalanceContextMovement|null,next:next.data as V2BalanceContextMovement|null};
 }
 
 export async function loadV2MissingBusinessDays():Promise<string[]>{
