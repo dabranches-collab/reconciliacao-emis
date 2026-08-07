@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.1.8`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.1.9`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -330,6 +330,9 @@ grupos de reconciliação na série atual.
 - Em 7 de agosto de 2026, os dados operacionais V1 foram eliminados e a respetiva
   tabela de movimentos ficou vazia. A V2 foi preservada integralmente. Na gestão
   de acessos ficou apenas a conta protegida do proprietário da plataforma.
+- A 2.1.9 fez uma auditoria de contraste em modo escuro aos nove ecrãs do Real
+  Time e definiu cores explícitas para administração, tabelas, estados, guia,
+  resultados e movimentos, evitando texto herdado sobre fundos claros.
 
 ### 12.4 Operação e recuperação
 
