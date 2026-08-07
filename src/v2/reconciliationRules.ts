@@ -21,5 +21,5 @@ export const accountingAssumptions=[
   ['Fronteira inicial','Pode excluir-se do saldo ajustado o efeito de movimentos cujo início é anterior ao primeiro extrato disponível.'],
   ['Abertos atuais e históricos',`${openAgeDefinitions.current} ${openAgeDefinitions.historical}`],
   ['Janela operacional','Todos os movimentos por reconciliar permanecem ativos. As reconciliações dos últimos 7 dias ficam na janela operacional; as anteriores permanecem disponíveis no histórico, nas métricas e nos grupos agregados, sem voltarem a entrar no motor.'],
-  ['Confirmação técnica','As propostas secundárias mantêm todas as linhas disponíveis no menu Confirmações. A aprovação individual ou em lote volta a validar que as linhas estão abertas e que o saldo continua exatamente em zero.'],
+  ['Confirmação técnica','Só chegam ao menu Confirmações propostas secundárias que não sejam explicadas por um único IDTR. Se todas as linhas tiverem o mesmo IDTR e saldo zero, fecham automaticamente. A aprovação individual ou em lote volta a validar que as restantes linhas estão abertas e que o saldo continua exatamente em zero.'],
 ] as const;

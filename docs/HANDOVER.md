@@ -366,9 +366,14 @@ grupos de reconciliação na série atual.
   secundários por operação ou por operação e descrição comparável são propostas
   auditáveis: o técnico vê todas as linhas, pode aprovar/rejeitar individualmente
   ou em lote, e a base volta a validar linhas abertas e saldo zero antes do fecho.
-  A aplicação inicial da regra fechou 18.738 pares únicos (37.476 movimentos) e
-  deixou 1.358 propostas para validação, correspondentes a 2.998 movimentos. O
-  dashboard ficou com 4.411.318 reconciliados e 162.879 em aberto.
+  A aplicação inicial da regra fechou 18.738 pares únicos (37.476 movimentos).
+  Uma auditoria adicional retirou da fila 1.273 propostas (2.546 movimentos)
+  cujas parcelas tinham todas o mesmo IDTR e saldo zero: esses casos são
+  reconciliados automaticamente por IDTR, sem confirmação técnica. Permanecem
+  consultáveis como 1.273 pares automáticos no estado Confirmadas, mostrando
+  apenas as duas linhas efetivamente casadas. Restaram 85
+  propostas para validação, correspondentes a 452 movimentos. O dashboard ficou
+  com 4.413.864 reconciliados e 160.333 em aberto.
 
 ### 12.4 Operação e recuperação
 
