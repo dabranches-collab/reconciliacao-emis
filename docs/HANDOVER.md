@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.3.1`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.4.0`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -350,6 +350,11 @@ grupos de reconciliação na série atual.
   ordenar todos os abertos em memória: a medição SQL passou de cerca de 7
   segundos e mais de 50 mil páginas consultadas para cerca de 3 milissegundos e
   22 páginas, eliminando o `statement timeout` ao entrar no menu.
+- A 2.4.0 tornou o login na entrada principal do Real Time e retirou o acesso
+  ao antigo hub/STC. Em Movimentos acrescentou acessos diretos aos reconciliados
+  dos últimos 7 dias, ao histórico reconciliado e aos movimentos efetivamente
+  fechados pela última importação. A importação de fecho fica registada no grupo
+  e no movimento, com índice próprio para consulta e exportação rápidas.
 
 ### 12.4 Operação e recuperação
 

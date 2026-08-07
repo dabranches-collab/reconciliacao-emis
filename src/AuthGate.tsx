@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { LockKeyhole } from "lucide-react";
+import { ArrowLeftRight, Check, CircleDollarSign, LockKeyhole } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { logPlatformAccess } from "./lib/database";
 
@@ -133,6 +133,22 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   };
   return (
     <div className="auth-page">
+      <section className="auth-experience">
+      <div className="auth-story" aria-hidden="true">
+        <div className="auth-story-copy">
+          <p className="eyebrow">RECONCILIAÇÃO EMIS · REAL TIME</p>
+          <h2>Milhões de movimentos.<br/><span>Um saldo explicado.</span></h2>
+          <p>Débitos e créditos percorrem um circuito auditável até se encontrarem, fecharem e deixarem visível apenas o que exige atenção.</p>
+        </div>
+        <div className="accounting-orbit">
+          <div className="orbit-ring ring-one"/><div className="orbit-ring ring-two"/>
+          <span className="flow-token debit">−</span><span className="flow-token credit">+</span>
+          <div className="orbit-centre"><ArrowLeftRight/><strong>0,00</strong><small>SALDO RECONCILIADO</small></div>
+          <div className="ledger-chip chip-debit"><CircleDollarSign/><span>DÉBITO</span><strong>− 2 450 000</strong></div>
+          <div className="ledger-chip chip-credit"><CircleDollarSign/><span>CRÉDITO</span><strong>+ 2 450 000</strong></div>
+        </div>
+        <div className="auth-proof"><span><Check/> IDTR validado</span><span><Check/> Saldo zero</span><span><Check/> Rastreabilidade integral</span></div>
+      </div>
       <form className="auth-card" onSubmit={(event) => void submit(event)}>
         <img
           className="keve-logo auth-keve-logo"
@@ -185,6 +201,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           Dados simulados · nenhuma alteração na base central
         </small>
       </form>
+      </section>
     </div>
   );
 }

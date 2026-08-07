@@ -12,7 +12,6 @@ import {
   CreditCard,
   Download,
   FileSpreadsheet,
-  Grid2X2,
   History,
   Info,
   Landmark,
@@ -843,8 +842,7 @@ export default function App() {
     | "users"
     | "audit";
   const [tool, setTool] = useState<Tool>(() => {
-    const saved = sessionStorage.getItem("reconciliation-active-tool");
-    return saved === "realtime" || saved === "stc" ? saved : "portal";
+    return "realtime";
   });
   const [view, setView] = useState<View>(() => {
     const saved = sessionStorage.getItem("reconciliation-active-view");
@@ -858,7 +856,7 @@ export default function App() {
       saved === "users" ||
       saved === "audit"
       ? saved
-      : "import";
+      : "results";
   });
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const selectView=(next:View)=>{setView(next);setMobileMenuOpen(false)};
@@ -1309,10 +1307,6 @@ export default function App() {
             <span>Real Time</span>
           </div>
         </div>
-        <button className="tool-switcher" onClick={() => setTool("portal")}>
-          <Grid2X2 size={17} />
-          Todas as ferramentas
-        </button>
         <nav>
           <button
             className={view === "guide" ? "active" : ""}
