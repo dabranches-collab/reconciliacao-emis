@@ -83,7 +83,7 @@ export class ImportFinalizationWorkflow extends WorkflowEntrypoint{
 
 export class V2FinalizationWorkflow extends WorkflowEntrypoint{
   async run(event,step){
-    const {importId,actorId}=event.payload,phase=event.payload.phase??'initialize',startBucket=Number(event.payload.startBucket??0),persistedBucketCount=Number(event.payload.bucketCount??0);
+    const {importId,actorId}=event.payload,phase=event.payload.phase??'initialize',startBucket=Number(event.payload.startBucket??0),persistedBucketCount=Number(event.payload.bucketCount??0),persistedSecondaryBucketCount=Number(event.payload.secondaryBucketCount??0);
     const call=async(phase,bucket=null,bucketCount=null)=>{
       const result=await serviceRequest(this.env,'rpc/finalize_rt_v2_import_phase_as_owner',{method:'POST',body:{p_import_id:importId,p_actor_id:actorId,p_phase:phase,p_bucket:bucket,p_bucket_count:bucketCount}});
       const movements=Number(result?.movements??0);
@@ -96,13 +96,18 @@ export class V2FinalizationWorkflow extends WorkflowEntrypoint{
     // Os buckets partilham tabelas de candidatos. Executá-los em paralelo
     // provoca lock_timeout e retries longos no Postgres; sequencial é mais
     // rápido e previsível, mantendo o paralelismo apenas entre tarefas da app.
-    // 128/64 mantém cada chamada abaixo do limite de 2 minutos do gateway
-    // PostgREST mesmo quando a série já contém vários milhões de movimentos.
-    // O trabalho total é equivalente, mas deixa de ser repetido após um 504.
+    // A grelha adapta-se ao número de chaves novas. Os movimentos reconciliados
+    // antigos permanecem apenas como histórico/grupos e não entram novamente
+    // nos candidatos; todos os movimentos em aberto continuam operacionais.
     // Continuações criadas antes da 2.1.2 não transportavam bucketCount e
     // pertencem ao plano legado 64/32. Preservá-lo evita mudar a grelha a meio.
-    const primaryBucketCount=phase==='primary'?(persistedBucketCount||(startBucket>0?64:128)):128;
-    const secondaryBucketCount=phase==='primary'?(primaryBucketCount===64?32:64):(phase==='secondary'?(persistedBucketCount||(startBucket>0?32:64)):64);
+    let initialization=null;
+    if(phase==='initialize')initialization=await step.do('preparar finalização v2',{retries:{limit:3,delay:'15 seconds',backoff:'exponential'},timeout:'5 minutes'},async()=>call('initialize'));
+    const adaptiveBuckets=(count,limits)=>count<=limits[0]?8:count<=limits[1]?16:count<=limits[2]?32:count<=limits[3]?64:128;
+    const plannedPrimary=adaptiveBuckets(Number(initialization?.primaryCandidates??0),[2_000,10_000,40_000,120_000]);
+    const plannedSecondary=adaptiveBuckets(Number(initialization?.secondaryCandidates??0),[2_000,10_000,40_000,120_000]);
+    const primaryBucketCount=phase==='initialize'?plannedPrimary:(phase==='primary'?(persistedBucketCount||(startBucket>0?64:128)):128);
+    const secondaryBucketCount=phase==='initialize'?plannedSecondary:(phase==='primary'?(persistedSecondaryBucketCount||(primaryBucketCount<=16?8:primaryBucketCount<=32?16:primaryBucketCount<=64?32:64)):(phase==='secondary'?(persistedBucketCount||(startBucket>0?32:64)):64));
     const chunkSize=8,parallelBucketCount=1;
     const continueInChild=async params=>{
       const id=`v2-${importId}-${params.phase}-${params.startBucket}`;
@@ -116,7 +121,6 @@ export class V2FinalizationWorkflow extends WorkflowEntrypoint{
         return{id,status:status.status==='errored'||status.status==='terminated'?'restarted':'already_running'};
       }
     };
-    if(phase==='initialize')await step.do('preparar finalização v2',{retries:{limit:3,delay:'15 seconds',backoff:'exponential'},timeout:'5 minutes'},async()=>call('initialize'));
     const currentPhase=phase==='initialize'?'primary':phase,bucketCount=currentPhase==='primary'?primaryBucketCount:secondaryBucketCount;
     const endBucket=Math.min(bucketCount,startBucket+chunkSize);
     let firstParallelBucket=startBucket;
@@ -129,7 +133,7 @@ export class V2FinalizationWorkflow extends WorkflowEntrypoint{
       await step.do(`${currentPhase==='primary'?'idtr':'secundária'} ${buckets[0]+1}-${buckets.at(-1)+1} de ${bucketCount}`,{retries:{limit:5,delay:'10 seconds',backoff:'exponential'},timeout:'5 minutes'},async()=>Promise.all(buckets.map(currentBucket=>call(currentPhase,currentBucket,bucketCount))));
     }
     if(endBucket<bucketCount){
-      const next={importId,actorId,phase:currentPhase,startBucket:endBucket,bucketCount};
+      const next={importId,actorId,phase:currentPhase,startBucket:endBucket,bucketCount,secondaryBucketCount};
       await step.do(`continuar ${currentPhase} em nova execução`,{retries:{limit:5,delay:'10 seconds',backoff:'exponential'},timeout:'2 minutes'},async()=>continueInChild(next));
       return{importId,status:'continued',phase:currentPhase,nextBucket:endBucket};
     }

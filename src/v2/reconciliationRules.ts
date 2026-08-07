@@ -18,4 +18,5 @@ export const accountingAssumptions=[
   ['Prazos D+','São contados em dias operacionais, excluindo sábado e domingo. O calendário de feriados fica explícito como configuração futura, não como regra presumida.'],
   ['Fronteira inicial','Pode excluir-se do saldo ajustado o efeito de movimentos cujo início é anterior ao primeiro extrato disponível.'],
   ['Abertos atuais e históricos',`${openAgeDefinitions.current} ${openAgeDefinitions.historical}`],
+  ['Janela operacional','Todos os movimentos por reconciliar permanecem ativos. As reconciliações dos últimos 7 dias ficam na janela operacional; as anteriores permanecem disponíveis no histórico, nas métricas e nos grupos agregados, sem voltarem a entrar no motor.'],
 ] as const;

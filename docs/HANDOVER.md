@@ -257,7 +257,7 @@ versionadas em cada grupo de reconciliação.
 
 ## 12. Estado da aplicação após 7 de agosto de 2026
 
-A linha ativa é a versão `2.1.9`. O importador usa exclusivamente o formato
+A linha ativa é a versão `2.3.0`. O importador usa exclusivamente o formato
 original confirmado, encontra colunas por cabeçalhos normalizados e preserva os
 valores nativos. O Worker da Cloudflare conduz a finalização no servidor por
 blocos determinísticos; fechar ou atualizar o browser depois da ingestão já não
@@ -339,6 +339,12 @@ grupos de reconciliação na série atual.
   imediatamente anterior e seguinte da mesma importação, conta e moeda. O
   índice composto `rt_v2_movements_balance_sequence_lookup_idx` suporta esta
   consulta sem percorrer a tabela integral.
+- A 2.3.0 formalizou a janela operacional de 7 dias: todos os movimentos em
+  aberto continuam candidatos, enquanto reconciliações antigas permanecem nos
+  grupos e métricas históricas sem voltar ao motor. O número de blocos deixou de
+  ser fixo em 128/64 e passou a adaptar-se às chaves efetivamente trazidas por
+  cada novo ficheiro, reduzindo chamadas vazias sem aumentar o tamanho de cada
+  operação em ficheiros grandes.
 
 ### 12.4 Operação e recuperação
 
