@@ -405,3 +405,21 @@ automática para zero e recalcula os resultados derivados existentes sem reler
 os ficheiros. Uma futura identificação de fechos sem abertura exigirá um
 critério contabilístico verificável e auditável; não deve ser inferida apenas
 pela data ou pelo sinal do movimento.
+
+### 12.6 Acesso por PIN
+
+A versão 2.8.0 introduz PIN de quatro algarismos como método normal de entrada,
+mantendo a palavra-passe apenas como recuperação. O PIN não é usado diretamente
+como password Supabase nem é guardado na base de dados. As Edge Functions
+`admin-users` e `pin-login` derivam uma credencial técnica forte através de HMAC.
+Usam `PIN_PEPPER` quando definido e, caso contrário, a chave `service_role` que
+já é injetada exclusivamente no servidor; nunca colocar qualquer destes segredos
+no frontend ou GitHub. Se a chave usada como pepper for rodada, os PIN terão de
+ser redefinidos.
+
+O endpoint público `pin-login` exige email e quatro algarismos, devolve apenas
+uma sessão Supabase válida e aplica bloqueio de 15 minutos após cinco tentativas
+falhadas. A tabela `pin_login_attempts` é inacessível a `anon` e
+`authenticated`. Na gestão de utilizadores, novas contas recebem um PIN e o
+proprietário pode definir ou redefinir o seu próprio PIN sem deixar de conservar
+a recuperação por email.

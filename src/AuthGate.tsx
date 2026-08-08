@@ -42,6 +42,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(Boolean(supabase));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [error, setError] = useState("");
   const [identity, setIdentity] = useState<Identity>(emptyIdentity);
   const [demoMode, setDemoMode] = useState(false);
@@ -123,12 +125,18 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     event.preventDefault();
     setError("");
     setLoading(true);
-    const { error: signInError } = await client.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInError) setError("Email ou password inválidos.");
-    else await logPlatformAccess();
+    if (usePassword) {
+      const { error: signInError } = await client.auth.signInWithPassword({email,password});
+      if (signInError) setError("Email ou palavra-passe inválidos.");
+      else await logPlatformAccess();
+    } else {
+      const {data,error:invokeError}=await client.functions.invoke("pin-login",{body:{email,pin}});
+      if(invokeError||data?.error||!data?.session)setError(String(data?.error??"Email ou PIN inválidos."));
+      else {
+        const {error:sessionError}=await client.auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});
+        if(sessionError)setError("Não foi possível iniciar a sessão.");
+      }
+    }
     setLoading(false);
   };
   return (
@@ -174,20 +182,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
-        <label>
-          Password
-          <input
-            type="password"
-            autoComplete="current-password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+        {usePassword?<label>
+          Palavra-passe
+          <input type="password" autoComplete="current-password" required minLength={8} value={password} onChange={(e)=>setPassword(e.target.value)}/>
+        </label>:<label>
+          PIN de 4 algarismos
+          <input className="pin-input" type="password" inputMode="numeric" autoComplete="current-password" required pattern="[0-9]{4}" maxLength={4} value={pin} onChange={(e)=>setPin(e.target.value.replace(/\D/g,'').slice(0,4))}/>
+        </label>}
         {error && <div className="error">{error}</div>}
         <button className="primary-button" disabled={loading}>
           {loading ? "A entrar…" : "Entrar"}
+        </button>
+        <button type="button" className="auth-method-button" disabled={loading} onClick={()=>{setError("");setUsePassword(value=>!value);}}>
+          {usePassword?"Entrar com PIN":"Entrar com palavra-passe"}
         </button>
         <button
           type="button"

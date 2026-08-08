@@ -14,6 +14,7 @@
 .auth-card label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; margin: 14px 0; }
 .auth-card input { border: 1px solid #cfdcd8; border-radius: 9px; padding: 12px; }
 .auth-card button { width: 100%; margin-top: 10px; }
+.auth-card .pin-input,.user-form .pin-input{font-variant-numeric:tabular-nums;letter-spacing:.45em;font-size:20px;font-weight:900;text-align:center}.auth-method-button{border:0;background:transparent;color:#4c2abb;font-weight:800;cursor:pointer}.auth-method-button:hover{text-decoration:underline}:root[data-theme='dark'] .auth-method-button{color:#d7cdff}
 .empty-state { min-height: 360px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 48px; color: #59706a; }
 .empty-state h2 { color: #183b34; margin: 16px 0 7px; }
 .empty-state p { max-width: 520px; margin-bottom: 22px; }
